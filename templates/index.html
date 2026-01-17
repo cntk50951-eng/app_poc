@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>默書助手 - Dictation Practice</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .btn-primary {
+            @apply bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition;
+        }
+        .btn-success {
+            @apply bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition;
+        }
+        .btn-danger {
+            @apply bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition;
+        }
+        .card {
+            @apply bg-white rounded-lg shadow-md p-6;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .quiz-item {
+            transition: all 0.3s ease;
+        }
+        .quiz-item.correct {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .quiz-item.incorrect {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+        .quiz-item.pending {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+        .play-btn.playing {
+            background-color: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 shadow-lg">
+        <div class="container mx-auto px-4">
+            <h1 class="text-2xl font-bold"><i class="fas fa-microphone-alt mr-2"></i>默書助手</h1>
+            <p class="text-sm opacity-80">Dictation Practice Tool</p>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Step 1: Upload Image -->
+        <section id="step-upload" class="card mb-8 fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700"><i class="fas fa-camera mr-2"></i>步驟1：上傳圖片</h2>
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition cursor-pointer"
+                 id="upload-area">
+                <input type="file" id="image-input" accept="image/*" class="hidden">
+                <div id="upload-placeholder">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-500">點擊或拖曳圖片到此處上傳</p>
+                    <p class="text-sm text-gray-400 mt-2">支援 JPG, PNG, GIF</p>
+                </div>
+                <img id="preview-image" class="hidden max-h-64 mx-auto rounded-lg" alt="Preview">
+            </div>
+            <div class="mt-4 flex gap-4">
+                <button id="recognize-btn" class="btn-primary w-full" disabled>
+                    <i class="fas fa-search mr-2"></i>開始識別文字
+                </button>
+            </div>
+            <div id="ocr-loading" class="hidden mt-4 text-center">
+                <div class="loading-spinner mx-auto mb-2"></div>
+                <p class="text-gray-500">正在識別文字...</p>
+            </div>
+            <div id="ocr-error" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg"></div>
+        </section>
+
+        <!-- Step 2: View Extracted Content -->
+        <section id="step-content" class="card mb-8 hidden fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700"><i class="fas fa-list mr-2"></i>步驟2：選擇聽寫內容</h2>
+
+            <!-- Words Section -->
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-2 text-blue-600">📚 單詞列表 (Words)</h3>
+                <div id="words-container" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded">
+                    <!-- Words will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Sentences Section -->
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-2 text-green-600">📝 句子列表 (Sentences)</h3>
+                <div id="sentences-container" class="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded">
+                    <!-- Sentences will be inserted here -->
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button id="start-words-btn" class="btn-success flex-1">
+                    <i class="fas fa-headphones mr-2"></i>聽寫單詞
+                </button>
+                <button id="start-sentences-btn" class="btn-primary flex-1">
+                    <i class="fas fa-book-reader mr-2"></i>聽寫句子
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 3: Dictation Mode -->
+        <section id="step-dictation" class="card hidden fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-700">
+                    <i class="fas fa-pencil-alt mr-2"></i><span id="dictation-title">聽寫模式</span>
+                </h2>
+                <div class="text-sm text-gray-500">
+                    <span id="current-index">0</span> / <span id="total-count">0</span>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+
+            <!-- Current Item Display -->
+            <div id="current-item-card" class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-8 text-center mb-6">
+                <div id="item-type-badge" class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm mb-4">
+                    單詞
+                </div>
+                <h3 id="current-item-text" class="text-4xl font-bold text-gray-800 mb-4">---</h3>
+                <p id="current-item-meaning" class="text-lg text-gray-600 hidden">---</p>
+            </div>
+
+            <!-- Audio Player Controls -->
+            <div class="flex justify-center items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <button id="prev-audio-btn" class="p-3 rounded-full hover:bg-gray-200 transition" title="上一個">
+                    <i class="fas fa-step-backward text-xl"></i>
+                </button>
+
+                <button id="play-audio-btn" class="play-btn p-4 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition shadow-lg" title="播放/暫停">
+                    <i class="fas fa-play text-2xl pl-1"></i>
+                </button>
+
+                <button id="next-audio-btn" class="p-3 rounded-full hover:bg-gray-200 transition" title="下一個">
+                    <i class="fas fa-step-forward text-xl"></i>
+                </button>
+
+                <button id="auto-play-btn" class="p-3 rounded-full hover:bg-gray-200 transition" title="自動播放">
+                    <i class="fas fa-play-circle text-xl text-gray-600"></i>
+                </button>
+            </div>
+
+            <!-- Answer Input -->
+            <div class="mb-6">
+                <input type="text" id="answer-input"
+                       class="w-full px-4 py-3 text-xl border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                       placeholder="輸入你的答案...">
+                <p class="text-sm text-gray-500 mt-1">按 Enter 確認答案</p>
+            </div>
+
+            <!-- Marking Buttons -->
+            <div class="flex gap-4 mb-6">
+                <button id="mark-correct-btn" class="btn-success flex-1 py-3">
+                    <i class="fas fa-check mr-2"></i>對了 ✓
+                </button>
+                <button id="mark-incorrect-btn" class="btn-danger flex-1 py-3">
+                    <i class="fas fa-times mr-2"></i>錯了 ✗
+                </button>
+            </div>
+
+            <!-- Navigation -->
+            <div class="flex justify-between">
+                <button id="back-btn" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-arrow-left mr-2"></i>返回
+                </button>
+                <button id="finish-btn" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">
+                    完成並查看結果 <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 4: Results -->
+        <section id="step-results" class="card hidden fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">
+                <i class="fas fa-trophy mr-2"></i>聽寫結果
+            </h2>
+
+            <!-- Summary -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="text-center p-4 bg-green-100 rounded-lg">
+                    <div id="correct-count" class="text-3xl font-bold text-green-600">0</div>
+                    <div class="text-sm text-green-800">正確</div>
+                </div>
+                <div class="text-center p-4 bg-red-100 rounded-lg">
+                    <div id="incorrect-count" class="text-3xl font-bold text-red-600">0</div>
+                    <div class="text-sm text-red-800">錯誤</div>
+                </div>
+                <div class="text-center p-4 bg-yellow-100 rounded-lg">
+                    <div id="accuracy" class="text-3xl font-bold text-yellow-600">0%</div>
+                    <div class="text-sm text-yellow-800">正確率</div>
+                </div>
+            </div>
+
+            <!-- Results List -->
+            <div id="results-list" class="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                <!-- Results will be inserted here -->
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-4">
+                <button id="retry-btn" class="btn-primary flex-1">
+                    <i class="fas fa-redo mr-2"></i>重新練習
+                </button>
+                <button id="home-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded flex-1">
+                    <i class="fas fa-home mr-2"></i>返回首頁
+                </button>
+            </div>
+        </section>
+
+        <!-- Hidden Audio Element -->
+        <audio id="audio-player" class="hidden"></audio>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-4 mt-8">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>默書助手 - Dictation Practice Tool</p>
+            <p class="text-gray-400 mt-1">Powered by OCR.space, DeepSeek & Murf AI</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
