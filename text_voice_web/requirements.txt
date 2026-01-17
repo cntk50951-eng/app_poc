@@ -1,0 +1,9 @@
+# Web Framework
+Flask==3.0.0
+python-dotenv==1.0.0
+
+# HTTP Requests
+requests==2.31.0
+
+# For local TTS audio file serving
+Werkzeug==3.0.0
