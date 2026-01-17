@@ -1,4 +1,30 @@
-venv/
+# Environment files
+.env
+.env.local
+
+# Python
 __pycache__/
-*.log
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Virtual environment
+venv/
