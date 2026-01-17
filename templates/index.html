@@ -7,6 +7,18 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Dark Mode Styles */
+        .dark body { background-color: #1a202c; color: #e2e8f0; }
+        .dark .card { background-color: #2d3748; color: #e2e8f0; }
+        .dark .text-gray-700 { color: #e2e8f0 !important; }
+        .dark .bg-gray-100 { background-color: #1a202c !important; }
+        .dark .bg-white { background-color: #2d3748 !important; }
+        .dark .bg-gray-50 { background-color: #4a5568 !important; }
+        .dark .text-gray-500 { color: #a0aec0 !important; }
+        .dark .text-gray-600 { color: #a0aec0 !important; }
+        .dark #words-container, .dark #sentences-container { background-color: #4a5568 !important; }
+        .dark #current-item-card { background: linear-gradient(to bottom right, #2d3748, #4a5568) !important; }
+
         .btn-primary {
             @apply bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition;
         }
@@ -15,6 +27,9 @@
         }
         .btn-danger {
             @apply bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition;
+        }
+        .btn-warning {
+            @apply bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition;
         }
         .card {
             @apply bg-white rounded-lg shadow-md p-6;
@@ -25,6 +40,10 @@
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
         .loading-spinner {
             border: 4px solid #f3f3f3;
@@ -57,18 +76,130 @@
             background-color: #3498db;
             color: white;
         }
+        .recording {
+            animation: pulse 1.5s ease-in-out infinite;
+            background-color: #ef4444 !important;
+        }
+        /* Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #d1d5db;
+            outline: none;
+        }
+        .dark input[type=range] {
+            background: #4a5568;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen transition-colors duration-300">
     <!-- Header -->
     <header class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 shadow-lg">
-        <div class="container mx-auto px-4">
-            <h1 class="text-2xl font-bold"><i class="fas fa-microphone-alt mr-2"></i>默書助手</h1>
-            <p class="text-sm opacity-80">Dictation Practice Tool</p>
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold"><i class="fas fa-microphone-alt mr-2"></i>默書助手</h1>
+                <p class="text-sm opacity-80">Dictation Practice Tool</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="stats-btn" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition" title="學習統計">
+                    <i class="fas fa-chart-bar text-xl"></i>
+                </button>
+                <button id="wrong-words-btn" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition" title="錯詞本">
+                    <i class="fas fa-bookmark text-xl"></i>
+                </button>
+                <button id="settings-btn" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition" title="設置">
+                    <i class="fas fa-cog text-xl"></i>
+                </button>
+                <button id="dark-mode-btn" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition" title="深色模式">
+                    <i class="fas fa-moon text-xl"></i>
+                </button>
+            </div>
         </div>
     </header>
 
     <div class="container mx-auto px-4 py-8">
+        <!-- Settings Panel (Hidden by default) -->
+        <div id="settings-panel" class="card mb-8 hidden fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700"><i class="fas fa-cog mr-2"></i>設置</h2>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Speech Speed Control -->
+                <div>
+                    <h3 class="font-bold mb-3 text-blue-600"><i class="fas fa-tachometer-alt mr-2"></i>語速設置</h3>
+                    <div class="mb-2">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>慢</span>
+                            <span id="speed-value">正常</span>
+                            <span>快</span>
+                        </div>
+                        <input type="range" id="speed-slider" min="-30" max="30" value="0" step="5">
+                    </div>
+                    <p class="text-sm text-gray-500">調整語音播放速度（預設: 正常）</p>
+                </div>
+
+                <!-- Voice Selection -->
+                <div>
+                    <h3 class="font-bold mb-3 text-green-600"><i class="fas fa-user-voice mr-2"></i>語音選擇</h3>
+                    <select id="voice-select" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none">
+                        <option value="en-US-natalie">Natalie (女聲)</option>
+                        <option value="en-US-ken">Ken (男聲)</option>
+                        <option value="en-US-miles">Miles (男聲)</option>
+                        <option value="en-US-arianna">Arianna (女聲)</option>
+                    </select>
+                </div>
+
+                <!-- Auto Play Settings -->
+                <div>
+                    <h3 class="font-bold mb-3 text-purple-600"><i class="fas fa-play-circle mr-2"></i>自動播放</h3>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="auto-play-toggle" class="sr-only">
+                        <div class="w-10 h-6 bg-gray-300 rounded-full relative transition-colors" id="auto-play-switch">
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform"></div>
+                        </div>
+                        <span class="ml-3 text-gray-700">開啟自動播放下一題</span>
+                    </label>
+                </div>
+
+                <!-- Repeat Count -->
+                <div>
+                    <h3 class="font-bold mb-3 text-orange-600"><i class="fas fa-redo mr-2"></i>語音重播次數</h3>
+                    <div class="flex items-center gap-4">
+                        <button onclick="dictationApp.setRepeatCount(1)" class="repeat-btn px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition">1次</button>
+                        <button onclick="dictationApp.setRepeatCount(2)" class="repeat-btn px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition">2次</button>
+                        <button onclick="dictationApp.setRepeatCount(3)" class="repeat-btn px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition">3次</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="close-settings" class="mt-4 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">
+                <i class="fas fa-check mr-2"></i>完成
+            </button>
+        </div>
+
         <!-- Step 1: Upload Image -->
         <section id="step-upload" class="card mb-8 fade-in">
             <h2 class="text-xl font-bold mb-4 text-gray-700"><i class="fas fa-camera mr-2"></i>步驟1：上傳圖片</h2>
@@ -100,7 +231,7 @@
 
             <!-- Words Section -->
             <div class="mb-6">
-                <h3 class="font-bold text-lg mb-2 text-blue-600">📚 單詞列表 (Words)</h3>
+                <h3 class="font-bold text-lg mb-2 text-blue-600">📚 單詞列表 (<span id="words-count">0</span>個)</h3>
                 <div id="words-container" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded">
                     <!-- Words will be inserted here -->
                 </div>
@@ -108,7 +239,7 @@
 
             <!-- Sentences Section -->
             <div class="mb-6">
-                <h3 class="font-bold text-lg mb-2 text-green-600">📝 句子列表 (Sentences)</h3>
+                <h3 class="font-bold text-lg mb-2 text-green-600">📝 句子列表 (<span id="sentences-count">0</span>個)</h3>
                 <div id="sentences-container" class="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded">
                     <!-- Sentences will be inserted here -->
                 </div>
@@ -130,8 +261,10 @@
                 <h2 class="text-xl font-bold text-gray-700">
                     <i class="fas fa-pencil-alt mr-2"></i><span id="dictation-title">聽寫模式</span>
                 </h2>
-                <div class="text-sm text-gray-500">
-                    <span id="current-index">0</span> / <span id="total-count">0</span>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-500">
+                        <span id="current-index">0</span> / <span id="total-count">0</span>
+                    </span>
                 </div>
             </div>
 
@@ -166,6 +299,20 @@
                 <button id="auto-play-btn" class="p-3 rounded-full hover:bg-gray-200 transition" title="自動播放">
                     <i class="fas fa-play-circle text-xl text-gray-600"></i>
                 </button>
+            </div>
+
+            <!-- Recording Section (New Feature) -->
+            <div class="mb-6 p-4 bg-purple-50 rounded-lg" id="recording-section">
+                <h4 class="font-bold text-purple-700 mb-3"><i class="fas fa-microphone mr-2"></i>錄音對比（可選）</h4>
+                <div class="flex justify-center items-center gap-4">
+                    <button id="record-btn" class="p-3 rounded-full bg-purple-500 hover:bg-purple-600 text-white transition" title="開始錄音">
+                        <i class="fas fa-microphone text-xl"></i>
+                    </button>
+                    <button id="play-record-btn" class="p-3 rounded-full bg-gray-400 hover:bg-gray-500 text-white transition" disabled title="播放錄音">
+                        <i class="fas fa-play text-xl"></i>
+                    </button>
+                    <span id="recording-status" class="text-sm text-gray-500">點擊麥克風開始錄音</span>
+                </div>
             </div>
 
             <!-- Answer Input -->
@@ -205,23 +352,34 @@
 
             <!-- Summary -->
             <div class="grid grid-cols-3 gap-4 mb-6">
-                <div class="text-center p-4 bg-green-100 rounded-lg">
+                <div class="text-center p-4 bg-green-100 rounded-lg stat-card">
                     <div id="correct-count" class="text-3xl font-bold text-green-600">0</div>
                     <div class="text-sm text-green-800">正確</div>
                 </div>
-                <div class="text-center p-4 bg-red-100 rounded-lg">
+                <div class="text-center p-4 bg-red-100 rounded-lg stat-card">
                     <div id="incorrect-count" class="text-3xl font-bold text-red-600">0</div>
                     <div class="text-sm text-red-800">錯誤</div>
                 </div>
-                <div class="text-center p-4 bg-yellow-100 rounded-lg">
+                <div class="text-center p-4 bg-yellow-100 rounded-lg stat-card">
                     <div id="accuracy" class="text-3xl font-bold text-yellow-600">0%</div>
                     <div class="text-sm text-yellow-800">正確率</div>
                 </div>
             </div>
 
+            <!-- Performance Message -->
+            <div id="performance-message" class="mb-6 p-4 rounded-lg text-center text-lg font-bold hidden">
+            </div>
+
             <!-- Results List -->
             <div id="results-list" class="space-y-3 mb-6 max-h-96 overflow-y-auto">
                 <!-- Results will be inserted here -->
+            </div>
+
+            <!-- Add Wrong Words to Review Book -->
+            <div class="mb-4">
+                <button id="save-wrong-words" class="btn-warning w-full py-3">
+                    <i class="fas fa-bookmark mr-2"></i>保存錯詞到錯詞本
+                </button>
             </div>
 
             <!-- Actions -->
@@ -235,12 +393,85 @@
             </div>
         </section>
 
+        <!-- Stats Panel (Hidden by default) -->
+        <section id="step-stats" class="card mb-8 hidden fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">
+                <i class="fas fa-chart-bar mr-2"></i>學習統計
+            </h2>
+
+            <!-- Overall Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="text-center p-4 bg-blue-100 rounded-lg stat-card">
+                    <div id="total-sessions" class="text-2xl font-bold text-blue-600">0</div>
+                    <div class="text-sm text-blue-800">總練習次數</div>
+                </div>
+                <div class="text-center p-4 bg-green-100 rounded-lg stat-card">
+                    <div id="total-correct" class="text-2xl font-bold text-green-600">0</div>
+                    <div class="text-sm text-green-800">總正確數</div>
+                </div>
+                <div class="text-center p-4 bg-red-100 rounded-lg stat-card">
+                    <div id="total-wrong" class="text-2xl font-bold text-red-600">0</div>
+                    <div class="text-sm text-red-800">總錯誤數</div>
+                </div>
+                <div class="text-center p-4 bg-purple-100 rounded-lg stat-card">
+                    <div id="avg-accuracy" class="text-2xl font-bold text-purple-600">0%</div>
+                    <div class="text-sm text-purple-800">平均正確率</div>
+                </div>
+            </div>
+
+            <!-- Today's Stats -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 class="font-bold text-lg mb-3">今日表現</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <div id="today-correct" class="text-2xl font-bold text-green-600">0</div>
+                        <div class="text-sm text-gray-600">今日正確</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="today-wrong" class="text-2xl font-bold text-red-600">0</div>
+                        <div class="text-sm text-gray-600">今日錯誤</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="today-accuracy" class="text-2xl font-bold text-blue-600">0%</div>
+                        <div class="text-sm text-gray-600">今日正確率</div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="close-stats" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">
+                <i class="fas fa-arrow-left mr-2"></i>返回
+            </button>
+        </section>
+
+        <!-- Wrong Words Panel (Hidden by default) -->
+        <section id="step-wrong-words" class="card mb-8 hidden fade-in">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">
+                <i class="fas fa-bookmark mr-2"></i>錯詞本
+            </h2>
+
+            <div id="wrong-words-list" class="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                <p class="text-gray-500 text-center py-8">暫無錯詞記錄</p>
+            </div>
+
+            <div class="flex gap-4">
+                <button id="practice-wrong-words" class="btn-success flex-1" disabled>
+                    <i class="fas fa-play mr-2"></i>複習錯詞
+                </button>
+                <button id="clear-wrong-words" class="btn-danger flex-1">
+                    <i class="fas fa-trash mr-2"></i>清除記錄
+                </button>
+                <button id="close-wrong-words" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
+                    <i class="fas fa-arrow-left mr-2"></i>返回
+                </button>
+            </div>
+        </section>
+
         <!-- Hidden Audio Element -->
         <audio id="audio-player" class="hidden"></audio>
     </div>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-4 mt-8">
+    <footer class="bg-gray-800 text-white py-4 mt-8 transition-colors duration-300">
         <div class="container mx-auto px-4 text-center text-sm">
             <p>默書助手 - Dictation Practice Tool</p>
             <p class="text-gray-400 mt-1">Powered by OCR.space, DeepSeek & Murf AI</p>
