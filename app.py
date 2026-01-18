@@ -23,8 +23,13 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 # Database configuration
 database_url = os.getenv('DATABASE_URL')
 if database_url:
-    # Use PostgreSQL on Render
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    # Use PostgreSQL on Render with pg8000 driver (pure Python, works with Python 3.13)
+    # Replace postgresql:// with postgresql+pg8000:// for pg8000 driver
+    if database_url.startswith('postgresql://'):
+        pg8000_url = database_url.replace('postgresql://', 'postgresql+pg8000://', 1)
+        app.config['SQLALCHEMY_DATABASE_URI'] = pg8000_url
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
     # Use SQLite locally
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
