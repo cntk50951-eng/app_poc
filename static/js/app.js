@@ -684,7 +684,7 @@ class DictationApp {
         // Check if already cached - play immediately
         if (this.ttsCache.has(text)) {
             this.audioPlayer.src = this.ttsCache.get(text);
-            this.audioPlayer.play();
+            this.audioPlayer.play().catch(e => console.log('Audio play error:', e));
             return;
         }
 
@@ -717,7 +717,10 @@ class DictationApp {
             if (data.success && data.audio_url) {
                 this.ttsCache.set(text, data.audio_url);
                 this.audioPlayer.src = data.audio_url;
-                this.audioPlayer.play();
+                // Play after setting src
+                this.audioPlayer.play().catch(e => console.log('Audio play error:', e));
+            } else {
+                alert('音頻生成失敗，請重試');
             }
         } catch (error) {
             console.error('TTS Error:', error);
@@ -733,6 +736,20 @@ class DictationApp {
                     icon.classList.remove('animate-spin');
                 }
             }
+        }
+    }
+
+    // ==================== ANSWER VISIBILITY TOGGLE ====================
+    toggleAnswerVisibility(show) {
+        const hiddenState = document.getElementById('answer-hidden-state');
+        const visibleState = document.getElementById('answer-visible-state');
+
+        if (show) {
+            hiddenState.classList.add('hidden');
+            visibleState.classList.remove('hidden');
+        } else {
+            hiddenState.classList.remove('hidden');
+            visibleState.classList.add('hidden');
         }
     }
 
@@ -801,7 +818,6 @@ class DictationApp {
         const progress = Math.round(((this.currentIndex + 1) / total) * 100);
 
         document.getElementById('session-number').textContent = this.currentIndex + 1;
-        document.getElementById('session-title').textContent = item.type === 'word' ? 'Chapter 4 詞語' : 'Chapter 4 句子';
         document.getElementById('current-item-num').textContent = this.currentIndex + 1;
         document.getElementById('total-items-num').textContent = total;
         document.getElementById('progress-percent').textContent = progress + '%';
@@ -810,6 +826,9 @@ class DictationApp {
         const text = item.word || item.sentence || '---';
         document.getElementById('reveal-answer').textContent = text;
         document.getElementById('reveal-pinyin').textContent = item.phonetic || item.meaning || '';
+
+        // Reset answer visibility
+        this.toggleAnswerVisibility(false);
 
         this.updatePlayButton(false);
     }
