@@ -362,7 +362,7 @@ class DictationApp {
         const date = new Date(session.created_at).toLocaleDateString('zh-HK');
 
         return `
-            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-primary/50 transition-colors" onclick="dictationApp.showSessionDetail(${session.id})">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
                         <div class="relative w-12 h-12 rounded-full flex items-center justify-center ${bgClass}">
@@ -385,6 +385,161 @@ class DictationApp {
                 </div>
             </div>
         `;
+    }
+
+    async showSessionDetail(sessionId) {
+        this.currentSessionId = sessionId;
+        this.showPage('page-session-detail');
+
+        const container = document.getElementById('session-items-list');
+        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>';
+
+        try {
+            const response = await fetch(`/api/practice/session/${sessionId}`);
+            const data = await response.json();
+
+            if (data.success && data.session) {
+                const session = data.session;
+                const accuracy = session.accuracy || 0;
+
+                // Update summary
+                document.getElementById('session-title').textContent = session.title;
+                document.getElementById('session-date').textContent = new Date(session.created_at).toLocaleString('zh-HK');
+                document.getElementById('session-total').textContent = session.total_items;
+                document.getElementById('session-correct').textContent = session.correct_count;
+                document.getElementById('session-wrong').textContent = session.wrong_count;
+
+                const badge = document.getElementById('session-accuracy-badge');
+                if (accuracy >= 90) {
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400';
+                    badge.textContent = '優秀';
+                } else if (accuracy >= 70) {
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400';
+                    badge.textContent = '良好';
+                } else {
+                    badge.className = 'px-3 py-1 rounded-full text-sm font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400';
+                    badge.textContent = '需要加油';
+                }
+
+                // Store session data for retry
+                this.currentSessionData = session;
+
+                // Render items
+                const wordsData = session.words_data || [];
+                if (wordsData.length > 0) {
+                    container.innerHTML = wordsData.map((item, index) => {
+                        const isCorrect = item.isCorrect === true || item.isCorrect === 'true';
+                        const text = item.text;
+                        const userAnswer = item.userAnswer || '';
+
+                        const itemClass = isCorrect
+                            ? 'border-green-200 dark:border-green-800'
+                            : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10';
+                        const statusBadge = isCorrect
+                            ? '<span class="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-bold">正確</span>'
+                            : '<span class="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold">錯誤</span>';
+
+                        // Get audio URL (from audio_id or audio_url)
+                        let audioUrl = item.audio_url || null;
+                        if (item.audio_id) {
+                            audioUrl = `/api/audio/${item.audio_id}`;
+                        }
+
+                        return `
+                            <div class="p-4 rounded-xl border-2 ${itemClass}">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold text-text-main dark:text-white">${text}</span>
+                                    ${statusBadge}
+                                </div>
+                                ${!isCorrect ? `
+                                    <div class="text-sm text-text-sub dark:text-gray-400">
+                                        你的答案: <span class="text-red-500 dark:text-red-400 line-through">${userAnswer}</span>
+                                    </div>
+                                ` : ''}
+                                ${audioUrl ? `
+                                    <button onclick="dictationApp.playSessionAudio('${audioUrl.replace(/'/g, "\\'")}')" class="mt-2 flex items-center gap-1 text-sm text-primary hover:text-primary-dark">
+                                        <span class="material-symbols-outlined" style="font-size: 18px;">volume_up</span>
+                                        播放音頻
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">暫無練習內容</p>';
+                }
+            } else {
+                container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗</p>';
+            }
+        } catch (error) {
+            console.error('Load session detail error:', error);
+            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗，請重試</p>';
+        }
+    }
+
+    playSessionAudio(audioUrl) {
+        this.audioPlayer.src = audioUrl;
+        this.audioPlayer.play();
+    }
+
+    retrySessionAll() {
+        if (!this.currentSessionData) return;
+        const wordsData = this.currentSessionData.words_data || [];
+
+        this.items = wordsData.map((item, index) => ({
+            word: item.type === 'word' ? item.text : null,
+            sentence: item.type === 'sentence' ? item.text : null,
+            type: item.type || 'word',
+            id: index,
+            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null)
+        }));
+
+        this.currentIndex = 0;
+        this.results = this.items.map(item => ({
+            ...item,
+            userAnswer: '',
+            isCorrect: null
+        }));
+
+        this.updateDictationUI();
+        this.showPage('page-dictation');
+
+        if (this.autoPlay) {
+            setTimeout(() => this.playCurrentAudio(), 500);
+        }
+    }
+
+    retrySessionWrong() {
+        if (!this.currentSessionData) return;
+        const wordsData = this.currentSessionData.words_data || [];
+        const wrongItems = wordsData.filter(item => item.isCorrect === false || item.isCorrect === 'false');
+
+        if (wrongItems.length === 0) {
+            this.showToast('沒有錯題需要練習！', 'info');
+            return;
+        }
+
+        this.items = wrongItems.map((item, index) => ({
+            word: item.type === 'word' ? item.text : null,
+            sentence: item.type === 'sentence' ? item.text : null,
+            type: item.type || 'word',
+            id: index,
+            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null)
+        }));
+
+        this.currentIndex = 0;
+        this.results = this.items.map(item => ({
+            ...item,
+            userAnswer: '',
+            isCorrect: null
+        }));
+
+        this.updateDictationUI();
+        this.showPage('page-dictation');
+
+        if (this.autoPlay) {
+            setTimeout(() => this.playCurrentAudio(), 500);
+        }
     }
 
     async loadRecentActivity() {
@@ -767,9 +922,10 @@ class DictationApp {
         if (this.selectedWordIndices.has(index)) {
             this.selectedWordIndices.delete(index);
         } else {
-            // For guest users, allow selection but warn on start
-            if (!this.isLoggedIn && this.selectedWordIndices.size >= 2 && this.selectedSentenceIndices.size >= 2) {
-                // Allow selection but will show error on start
+            // For guest users, limit to 2 words max
+            if (!this.isLoggedIn && this.selectedWordIndices.size >= 2) {
+                this.showToast('未登錄用戶最多可選擇 2 個單詞', 'error');
+                return;
             }
             this.selectedWordIndices.add(index);
         }
@@ -780,9 +936,10 @@ class DictationApp {
         if (this.selectedSentenceIndices.has(index)) {
             this.selectedSentenceIndices.delete(index);
         } else {
-            // For guest users, allow selection but warn on start
-            if (!this.isLoggedIn && this.selectedWordIndices.size >= 2 && this.selectedSentenceIndices.size >= 2) {
-                // Allow selection but will show error on start
+            // For guest users, limit to 2 sentences max
+            if (!this.isLoggedIn && this.selectedSentenceIndices.size >= 2) {
+                this.showToast('未登錄用戶最多可選擇 2 個句子', 'error');
+                return;
             }
             this.selectedSentenceIndices.add(index);
         }
@@ -905,14 +1062,6 @@ class DictationApp {
         if (selectedItems.length === 0) {
             this.showToast('請至少選擇一項！', 'error');
             return;
-        }
-
-        // Check limits for guest users
-        if (!this.isLoggedIn) {
-            if (selectedItems.length > 4) {
-                this.showErrorBanner('未登錄用戶最多可選擇 2 個單詞和 2 個句子，請登錄以選擇更多');
-                return;
-            }
         }
 
         this.items = selectedItems;
@@ -2080,13 +2229,23 @@ class DictationApp {
         const total = correct + wrong;
         const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-        // Prepare words data (only wrong answers)
-        const wordsData = this.results
-            .filter(r => r.isCorrect === false)
-            .map(r => ({
-                word: r.word || r.sentence,
-                userAnswer: r.userAnswer || ''
-            }));
+        // Prepare words data with audio info for all items
+        const wordsData = this.results.map(r => {
+            const text = r.word || r.sentence;
+            // Extract audio_id from audio_url if it's a database URL
+            let audioId = null;
+            if (r.audio_url && r.audio_url.includes('/api/audio/')) {
+                audioId = parseInt(r.audio_url.split('/api/audio/')[1]) || null;
+            }
+            return {
+                text: text,
+                type: r.type || 'word',
+                isCorrect: r.isCorrect,
+                userAnswer: r.userAnswer || '',
+                audio_url: r.audio_url || null,
+                audio_id: audioId
+            };
+        });
 
         try {
             const response = await fetch('/api/practice/record', {
@@ -2098,7 +2257,7 @@ class DictationApp {
                     correct_count: correct,
                     wrong_count: wrong,
                     accuracy: accuracy,
-                    words_data: wordsData.length > 0 ? JSON.stringify(wordsData) : null
+                    words_data: JSON.stringify(wordsData)
                 })
             });
 

@@ -610,6 +610,64 @@
         </main>
     </section>
 
+    <!-- ==================== SESSION DETAIL PAGE ==================== -->
+    <section id="page-session-detail" class="hidden">
+        <header class="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-5 pt-12 pb-4 border-b border-gray-100 dark:border-gray-800">
+            <div class="flex items-center justify-between">
+                <button onclick="dictationApp.showHistoryPage()" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </button>
+                <h2 class="text-lg font-bold text-text-main dark:text-white">練習詳情</h2>
+                <div class="w-10"></div>
+            </div>
+        </header>
+
+        <main class="px-5 w-full max-w-md mx-auto pt-4">
+            <!-- Session Summary -->
+            <div id="session-summary" class="bg-white dark:bg-surface-dark rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 id="session-title" class="text-lg font-bold text-text-main dark:text-white">練習</h3>
+                        <p id="session-date" class="text-sm text-text-sub dark:text-gray-400"></p>
+                    </div>
+                    <div id="session-accuracy-badge" class="px-3 py-1 rounded-full text-sm font-bold"></div>
+                </div>
+                <div class="flex justify-between text-center">
+                    <div>
+                        <div id="session-total" class="text-2xl font-bold text-text-main dark:text-white">0</div>
+                        <div class="text-xs text-text-sub dark:text-gray-400">總題數</div>
+                    </div>
+                    <div>
+                        <div id="session-correct" class="text-2xl font-bold text-green-500">0</div>
+                        <div class="text-xs text-text-sub dark:text-gray-400">正確</div>
+                    </div>
+                    <div>
+                        <div id="session-wrong" class="text-2xl font-bold text-red-500">0</div>
+                        <div class="text-xs text-text-sub dark:text-gray-400">錯誤</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 mb-6">
+                <button onclick="dictationApp.retrySessionAll()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary-dark transition-colors">
+                    <span class="material-symbols-outlined">replay</span>
+                    重新練習全部
+                </button>
+                <button onclick="dictationApp.retrySessionWrong()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 rounded-xl font-semibold hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors">
+                    <span class="material-symbols-outlined">error</span>
+                    只練錯題
+                </button>
+            </div>
+
+            <!-- Items List -->
+            <h4 class="text-base font-bold text-text-main dark:text-white mb-3">練習內容</h4>
+            <div id="session-items-list" class="flex flex-col gap-3 pb-32">
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>
+            </div>
+        </main>
+    </section>
+
     <!-- ==================== WRONG WORDS PAGE ==================== -->
     <section id="page-wrong-words" class="hidden">
         <header class="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-5 pt-12 pb-4 border-b border-gray-100 dark:border-gray-800">

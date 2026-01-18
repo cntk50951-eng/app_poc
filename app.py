@@ -85,6 +85,16 @@ class PracticeSession(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 
+class AudioFile(db.Model):
+    """Store audio files from Murf AI (since their URLs are temporary)"""
+    id = db.Column(db.Integer, primary_key=True)
+    text_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)  # MD5 hash of the text
+    text_content = db.Column(db.Text, nullable=False)  # The original text
+    audio_data = db.Column(db.LargeBinary, nullable=False)  # Actual audio file content
+    audio_format = db.Column(db.String(10), nullable=False, default='mp3')  # Audio format
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -333,12 +343,24 @@ def fallback_extraction(text, mode):
 def generate_speech_with_murf(text, voice_id="en-US-natalie", rate=-15, pitch=-5):
     """
     Generate speech using Murf AI API via direct HTTP call.
-    Returns the audio file URL.
+    First checks database for existing audio, otherwise generates new and stores.
+    Returns the audio file URL or None if failed.
 
     rate: -50 to 50 (negative = slower, positive = faster, default 0)
     pitch: -50 to 50 (negative = deeper, positive = higher, default 0)
     """
+    import hashlib
+
     try:
+        # Create hash for the text + voice settings (for caching)
+        cache_key = f"{voice_id}|{rate}|{pitch}|{text}"
+        text_hash = hashlib.md5(cache_key.encode()).hexdigest()
+
+        # Check if audio already exists in database
+        existing_audio = AudioFile.query.filter_by(text_hash=text_hash).first()
+        if existing_audio:
+            return existing_audio.id  # Return the database ID
+
         # Murf AI API endpoint
         url = "https://api.murf.ai/v1/speech/generate"
 
@@ -359,7 +381,26 @@ def generate_speech_with_murf(text, voice_id="en-US-natalie", rate=-15, pitch=-5
 
         if response.status_code == 200:
             result = response.json()
-            return result.get('audioFile')
+            audio_url = result.get('audioFile')
+
+            # Download and store the audio file
+            audio_response = requests.get(audio_url, timeout=60)
+            if audio_response.status_code == 200:
+                audio_data = audio_response.content
+
+                # Store in database
+                audio_file = AudioFile(
+                    text_hash=text_hash,
+                    text_content=text,
+                    audio_data=audio_data,
+                    audio_format='mp3'
+                )
+                db.session.add(audio_file)
+                db.session.commit()
+
+                return audio_file.id
+
+            return audio_url
         else:
             error_msg = response.text
             raise Exception(f"TTS API error ({response.status_code}): {error_msg}")
@@ -367,6 +408,22 @@ def generate_speech_with_murf(text, voice_id="en-US-natalie", rate=-15, pitch=-5
     except Exception as e:
         print(f"Murf AI API Error: {e}")
         raise
+
+
+@app.route('/api/audio/<int:audio_id>')
+def get_audio(audio_id):
+    """Serve audio file from database"""
+    try:
+        audio = AudioFile.query.get_or_404(audio_id)
+        from flask import Response
+        return Response(
+            audio.audio_data,
+            mimetype=f'audio/{audio.audio_format}',
+            headers={'Content-Disposition': f'inline; filename=audio.{audio.audio_format}'}
+        )
+    except Exception as e:
+        print(f"Get audio error: {e}")
+        return jsonify({'error': 'Audio not found'}), 404
 
 
 @app.route('/')
@@ -466,12 +523,15 @@ def tts_batch_api():
             item_id = item.get('id', 0)
 
             try:
-                audio_url = generate_speech_with_murf(text, voice_id=voice_id, rate=rate, pitch=pitch)
+                audio_result = generate_speech_with_murf(text, voice_id=voice_id, rate=rate, pitch=pitch)
+                # audio_result can be an integer (database ID) or string (URL)
+                audio_url = audio_result if isinstance(audio_result, str) else f"/api/audio/{audio_result}"
                 results.append({
                     'id': item_id,
                     'type': item_type,
                     'text': text,
                     'audio_url': audio_url,
+                    'audio_id': audio_result if isinstance(audio_result, int) else None,
                     'success': True
                 })
             except Exception as e:
@@ -806,12 +866,42 @@ def get_practice_history():
                 'correct_count': s.correct_count,
                 'wrong_count': s.wrong_count,
                 'accuracy': s.accuracy,
+                'words_data': json.loads(s.words_data) if s.words_data else [],
                 'created_at': s.created_at.isoformat()
             } for s in sessions]
         })
     except Exception as e:
         print(f"Get practice history error: {e}")
         return jsonify({'success': False, 'message': '獲取歷史失敗'}), 500
+
+
+@app.route('/api/practice/session/<int:session_id>')
+def get_practice_session(session_id):
+    """Get a specific practice session for retry"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+        session = PracticeSession.query.filter_by(id=session_id, user_id=current_user.id).first()
+        if not session:
+            return jsonify({'success': False, 'message': 'Session not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'session': {
+                'id': session.id,
+                'title': session.title,
+                'total_items': session.total_items,
+                'correct_count': session.correct_count,
+                'wrong_count': session.wrong_count,
+                'accuracy': session.accuracy,
+                'words_data': json.loads(session.words_data) if session.words_data else [],
+                'created_at': session.created_at.isoformat()
+            }
+        })
+    except Exception as e:
+        print(f"Get practice session error: {e}")
+        return jsonify({'success': False, 'message': '獲取失敗'}), 500
 
 
 @app.route('/api/practice/stats')
@@ -854,11 +944,13 @@ def get_practice_stats():
         history = []
         for s in recent_sessions[:10]:
             history.append({
+                'id': s.id,
                 'title': s.title,
                 'total_items': s.total_items,
                 'correct_count': s.correct_count,
                 'wrong_count': s.wrong_count,
                 'accuracy': s.accuracy,
+                'words_data': json.loads(s.words_data) if s.words_data else [],
                 'created_at': s.created_at.isoformat()
             })
 
