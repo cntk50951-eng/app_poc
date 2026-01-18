@@ -95,8 +95,8 @@ def create_extraction_prompt(text, mode):
 從以下英文文字中提取最重要的2個單詞（按重要性排序），返回 JSON 格式：
 
 [
-    {{"word": "單詞1", "meaning": "中文意思"}},
-    {{"word": "單詞2", "meaning": "中文意思"}}
+    {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
+    {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
 ]
 
 只返回 JSON，不要其他文字。
@@ -124,8 +124,8 @@ def create_extraction_prompt(text, mode):
 
 {{
     "words": [
-        {{"word": "單詞1", "meaning": "中文意思"}},
-        {{"word": "單詞2", "meaning": "中文意思"}}
+        {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
+        {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
     ],
     "sentences": [
         {{"sentence": "完整句子1"}},
@@ -153,12 +153,12 @@ def fallback_extraction(text, mode):
     sentences = [s.strip() for s in sentences if len(s.strip()) > 10][:2]
 
     if mode == 'words':
-        return [{"word": w, "meaning": ""} for w in unique_words]
+        return [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words]
     elif mode == 'sentences':
         return [{"sentence": s} for s in sentences]
     else:
         return {
-            "words": [{"word": w, "meaning": ""} for w in unique_words],
+            "words": [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words],
             "sentences": [{"sentence": s} for s in sentences]
         }
 

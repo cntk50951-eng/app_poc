@@ -1,6 +1,6 @@
 /**
  * Dictation App - Main JavaScript
- * New UI Design Implementation with dark mode, statistics, wrong words book
+ * UI improvements: loading animation, item selection, phonetic symbols, TTS optimization
  */
 
 class DictationApp {
@@ -9,6 +9,8 @@ class DictationApp {
         this.recognizedText = '';
         this.words = [];
         this.sentences = [];
+        this.allWords = []; // All words with phonetics from DeepSeek
+        this.allSentences = []; // All sentences from DeepSeek
         this.contentType = 'words'; // 'words' or 'sentences'
         this.dictationMode = 'words';
         this.currentIndex = 0;
@@ -16,9 +18,18 @@ class DictationApp {
         this.results = [];
         this.isPlaying = false;
         this.autoPlay = false;
+        this.dictationAutoPlay = false; // Auto-play on dictation page
         this.slowMode = false;
         this.slowModeSpeed = 0.5;
         this.audioPlayer = document.getElementById('audio-player');
+
+        // Selection state
+        this.selectedWordIndices = new Set();
+        this.selectedSentenceIndices = new Set();
+        this.maxSelection = 2;
+
+        // TTS cache - track which items have already been generated
+        this.ttsCache = new Map(); // key: text, value: audio_url
 
         // Settings
         this.darkMode = false;
@@ -54,7 +65,6 @@ class DictationApp {
         this.voiceId = settings.voiceId || 'en-US-natalie';
         this.autoPlay = settings.autoPlay || false;
 
-        // Update UI
         const speedSlider = document.getElementById('speed-slider');
         const voiceSelect = document.getElementById('voice-select');
         if (speedSlider) speedSlider.value = this.speechRate;
@@ -75,20 +85,16 @@ class DictationApp {
 
     // ==================== PAGE NAVIGATION ====================
     showPage(pageId) {
-        // Hide all pages
         document.querySelectorAll('[id^="page-"]').forEach(page => {
             page.classList.add('hidden');
         });
 
-        // Show target page
         const targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.classList.remove('hidden');
-            targetPage.classList.add('fade-in');
             this.currentPage = pageId;
         }
 
-        // Special page initializations
         if (pageId === 'page-stats') {
             this.updateStatsDisplay();
         } else if (pageId === 'page-wrong-words') {
@@ -201,7 +207,6 @@ class DictationApp {
 
     // ==================== CAMERA & IMAGE ====================
     startCamera() {
-        // For mobile devices, trigger file input
         document.getElementById('image-input').click();
     }
 
@@ -212,22 +217,39 @@ class DictationApp {
         reader.onload = (e) => {
             this.imageData = e.target.result;
 
-            // Show preview
             const preview = document.getElementById('ocr-preview');
             if (preview) {
                 preview.style.backgroundImage = `url('${this.imageData}')`;
             }
 
-            // Go to verify page and perform OCR
             this.showPage('page-verify');
             this.performOCR();
         };
         reader.readAsDataURL(file);
     }
 
+    // ==================== LOADING OVERLAY ====================
+    showLoading(message = '正在分析圖片...') {
+        const overlay = document.getElementById('loading-overlay');
+        const text = document.getElementById('loading-text');
+        if (overlay) {
+            if (text) text.textContent = message;
+            overlay.classList.remove('hidden');
+        }
+    }
+
+    hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
+    }
+
     // ==================== OCR ====================
     async performOCR() {
         if (!this.imageData) return;
+
+        this.showLoading('正在識別文字內容...');
 
         try {
             const response = await fetch('/api/ocr', {
@@ -240,14 +262,20 @@ class DictationApp {
 
             if (data.success) {
                 this.recognizedText = data.text;
-                this.words = data.extracted.words || [];
-                this.sentences = data.extracted.sentences || [];
+                this.allWords = data.extracted.words || [];
+                this.allSentences = data.extracted.sentences || [];
+
+                // Update counts
+                document.getElementById('words-count-badge').textContent = this.allWords.length;
+                document.getElementById('sentences-count-badge').textContent = this.allSentences.length;
 
                 this.renderContentList();
             } else {
+                this.hideLoading();
                 alert('OCR 識別失敗，請重試');
             }
         } catch (error) {
+            this.hideLoading();
             console.error('OCR Error:', error);
             alert('OCR 識別失敗：' + error.message);
         }
@@ -261,31 +289,29 @@ class DictationApp {
 
     renderContentList() {
         const container = document.getElementById('content-list');
-        const items = this.contentType === 'words' ? this.words : this.sentences;
-
-        // Update counts
-        document.getElementById('words-count-badge').textContent = this.words.length;
-        document.getElementById('sentences-count-badge').textContent = this.sentences.length;
+        const items = this.contentType === 'words' ? this.allWords : this.allSentences;
 
         if (!container) return;
 
         if (items.length === 0) {
             container.innerHTML = '<p class="text-gray-500 text-center py-8">暫無內容，請上傳圖片</p>';
+            this.hideLoading();
             return;
         }
 
         container.innerHTML = items.map((item, index) => {
             const text = item.word || item.sentence;
+            const phonetic = item.phonetic || '';
             const num = index + 1;
 
             return `
-                <div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border border-transparent focus-within:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                <div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-3 pr-2 rounded-xl shadow-soft border border-transparent hover:border-primary/30 transition-all">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-base">
                         ${num}
                     </div>
                     <div class="flex-1 min-w-0">
                         <input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="${text}" onchange="dictationApp.updateItem('${this.contentType}', ${index}, this.value)">
-                        <span class="text-[10px] text-green-500 font-medium">高準確度</span>
+                        ${phonetic ? `<div class="text-xs text-gray-400 font-mono">${phonetic}</div>` : ''}
                     </div>
                     <div class="flex items-center gap-1">
                         <button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.playItemAudio('${this.contentType}', ${index})">
@@ -298,22 +324,226 @@ class DictationApp {
                 </div>
             `;
         }).join('');
+
+        // Add "Go to Selection" button
+        container.innerHTML += `
+            <button onclick="dictationApp.goToSelection()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors font-semibold">
+                <span class="material-symbols-outlined">checklist</span>
+                選擇聽寫內容
+            </button>
+        `;
+
+        this.hideLoading();
+    }
+
+    goToSelection() {
+        this.showPage('page-selection');
+        this.renderSelectionList();
+    }
+
+    renderSelectionList() {
+        const wordsList = document.getElementById('words-selection-list');
+        const sentencesList = document.getElementById('sentences-selection-list');
+
+        // Render words
+        if (wordsList) {
+            wordsList.innerHTML = this.allWords.map((item, index) => {
+                const isSelected = this.selectedWordIndices.has(index);
+                return `
+                    <div onclick="dictationApp.toggleWordSelection(${index})" class="cursor-pointer flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
+                        <div class="flex-1">
+                            <div class="font-semibold text-text-main dark:text-white">${item.word}</div>
+                            ${item.phonetic ? `<div class="text-xs text-gray-400 font-mono">${item.phonetic}</div>` : ''}
+                        </div>
+                        <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render sentences
+        if (sentencesList) {
+            sentencesList.innerHTML = this.allSentences.map((item, index) => {
+                const isSelected = this.selectedSentenceIndices.has(index);
+                return `
+                    <div onclick="dictationApp.toggleSentenceSelection(${index})" class="cursor-pointer flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
+                        <div class="flex-1">
+                            <div class="font-semibold text-text-main dark:text-white">${item.sentence}</div>
+                        </div>
+                        <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        this.updateSelectionCounts();
+    }
+
+    toggleWordSelection(index) {
+        if (this.selectedWordIndices.has(index)) {
+            this.selectedWordIndices.delete(index);
+        } else {
+            if (this.selectedWordIndices.size >= this.maxSelection) {
+                // Remove oldest selection
+                const firstIndex = this.selectedWordIndices.values().next().value;
+                this.selectedWordIndices.delete(firstIndex);
+            }
+            this.selectedWordIndices.add(index);
+        }
+        this.renderSelectionList();
+    }
+
+    toggleSentenceSelection(index) {
+        if (this.selectedSentenceIndices.has(index)) {
+            this.selectedSentenceIndices.delete(index);
+        } else {
+            if (this.selectedSentenceIndices.size >= this.maxSelection) {
+                const firstIndex = this.selectedSentenceIndices.values().next().value;
+                this.selectedSentenceIndices.delete(firstIndex);
+            }
+            this.selectedSentenceIndices.add(index);
+        }
+        this.renderSelectionList();
+    }
+
+    updateSelectionCounts() {
+        const wordsCount = document.getElementById('selected-words-count');
+        const sentencesCount = document.getElementById('selected-sentences-count');
+        const totalSelected = document.getElementById('total-selected');
+        const startBtn = document.getElementById('start-selected-btn');
+
+        if (wordsCount) wordsCount.textContent = `(${this.selectedWordIndices.size}/${this.maxSelection})`;
+        if (sentencesCount) sentencesCount.textContent = `(${this.selectedSentenceIndices.size}/${this.maxSelection})`;
+
+        const total = this.selectedWordIndices.size + this.selectedSentenceIndices.size;
+        if (totalSelected) totalSelected.textContent = total;
+
+        if (startBtn) {
+            if (total > 0) {
+                startBtn.disabled = false;
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                startBtn.disabled = true;
+                startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+    }
+
+    // ==================== GENERATE AND START FROM SELECTION ====================
+    async startDictationFromSelection() {
+        const selectedItems = [];
+
+        // Get selected words
+        this.selectedWordIndices.forEach(index => {
+            const word = this.allWords[index];
+            selectedItems.push({
+                word: word.word,
+                phonetic: word.phonetic || '',
+                meaning: word.meaning || '',
+                type: 'word',
+                id: `word_${index}`,
+                audio_url: this.ttsCache.get(word.word) || null
+            });
+        });
+
+        // Get selected sentences
+        this.selectedSentenceIndices.forEach(index => {
+            const sentence = this.allSentences[index];
+            selectedItems.push({
+                sentence: sentence.sentence,
+                meaning: sentence.meaning || '',
+                type: 'sentence',
+                id: `sentence_${index}`,
+                audio_url: this.ttsCache.get(sentence.sentence) || null
+            });
+        });
+
+        if (selectedItems.length === 0) {
+            alert('請至少選擇一項！');
+            return;
+        }
+
+        this.items = selectedItems;
+        this.currentIndex = 0;
+        this.dictationMode = selectedItems[0].type;
+
+        // Generate audio only for items not yet cached
+        const itemsNeedingTTS = selectedItems.filter(item => !item.audio_url);
+        if (itemsNeedingTTS.length > 0) {
+            this.showLoading('正在生成音頻...');
+            await this.generateMissingAudio();
+            this.hideLoading();
+        }
+
+        // Initialize results
+        this.results = this.items.map(item => ({
+            ...item,
+            userAnswer: '',
+            isCorrect: null
+        }));
+
+        this.updateDictationUI();
+        this.updateDictationAutoPlayUI();
+        this.showPage('page-dictation');
+
+        // Auto-play first audio if enabled
+        if (this.autoPlay) {
+            setTimeout(() => this.playCurrentAudio(), 500);
+        }
+    }
+
+    async generateMissingAudio() {
+        const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
+        if (itemsNeedingTTS.length === 0) return;
+
+        try {
+            const response = await fetch('/api/tts/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: itemsNeedingTTS.map(item => ({
+                        text: item.word || item.sentence,
+                        type: item.type,
+                        id: item.id
+                    })),
+                    voice_id: this.voiceId,
+                    rate: this.speechRate,
+                    pitch: -5
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                data.results.forEach(result => {
+                    const item = this.items.find(i => i.id === result.id);
+                    if (item && result.success) {
+                        item.audio_url = result.audio_url;
+                        // Cache the TTS result
+                        const text = item.word || item.sentence;
+                        this.ttsCache.set(text, result.audio_url);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('TTS Error:', error);
+        }
     }
 
     updateItem(type, index, value) {
         if (type === 'words') {
-            this.words[index].word = value;
+            this.allWords[index].word = value;
         } else {
-            this.sentences[index].sentence = value;
+            this.allSentences[index].sentence = value;
         }
     }
 
     deleteItem(type, index) {
         if (confirm('確定要刪除此項目嗎？')) {
             if (type === 'words') {
-                this.words.splice(index, 1);
+                this.allWords.splice(index, 1);
             } else {
-                this.sentences.splice(index, 1);
+                this.allSentences.splice(index, 1);
             }
             this.renderContentList();
         }
@@ -321,28 +551,37 @@ class DictationApp {
 
     addNewItem() {
         const newItem = this.contentType === 'words'
-            ? { word: '新詞語', meaning: '', id: Date.now() }
-            : { sentence: '新句子', id: Date.now() };
+            ? { word: '新詞語', phonetic: '', meaning: '', id: Date.now() }
+            : { sentence: '新句子', meaning: '', id: Date.now() };
 
         if (this.contentType === 'words') {
-            this.words.push(newItem);
+            this.allWords.push(newItem);
         } else {
-            this.sentences.push(newItem);
+            this.allSentences.push(newItem);
         }
 
         this.renderContentList();
 
-        // Scroll to bottom
         setTimeout(() => {
             const list = document.getElementById('content-list');
             if (list) list.scrollTop = list.scrollHeight;
         }, 100);
     }
 
+    // ==================== AUDIO PLAYBACK ====================
     async playItemAudio(type, index) {
-        const items = type === 'words' ? this.words : this.sentences;
-        const text = items[index].word || items[index].sentence;
+        const items = type === 'words' ? this.allWords : this.allSentences;
+        const item = items[index];
+        const text = item.word || item.sentence;
 
+        // Check if already cached
+        if (this.ttsCache.has(text)) {
+            this.audioPlayer.src = this.ttsCache.get(text);
+            this.audioPlayer.play();
+            return;
+        }
+
+        // Generate new TTS
         try {
             const response = await fetch('/api/tts', {
                 method: 'POST',
@@ -358,6 +597,7 @@ class DictationApp {
             const data = await response.json();
 
             if (data.success && data.audio_url) {
+                this.ttsCache.set(text, data.audio_url);
                 this.audioPlayer.src = data.audio_url;
                 this.audioPlayer.play();
             }
@@ -366,97 +606,58 @@ class DictationApp {
         }
     }
 
-    // ==================== GENERATE AND START ====================
-    async generateAndStart() {
-        const items = this.contentType === 'words' ? this.words : this.sentences;
-
-        if (items.length === 0) {
-            alert('沒有可用的內容！');
-            return;
-        }
-
-        // Prepare items for dictation
-        this.items = items.map((item, index) => ({
-            ...item,
-            type: this.contentType === 'words' ? 'word' : 'sentence',
-            id: index,
-            audio_url: null
-        }));
-
+    // ==================== DICTATION SESSION ====================
+    switchAudioMode(mode) {
+        // Update mode and filter items
+        this.dictationMode = mode;
+        this.items = this.items.filter(item => item.type === mode);
         this.currentIndex = 0;
-        this.dictationMode = this.contentType;
-
-        // Generate audio for all items
-        await this.generateAllAudio();
-
-        // Initialize results
         this.results = this.items.map(item => ({
             ...item,
             userAnswer: '',
             isCorrect: null
         }));
-
-        // Update UI and show dictation page
         this.updateDictationUI();
-        this.showPage('page-dictation');
     }
 
-    async generateAllAudio() {
-        const btn = document.querySelector('#page-verify button[onclick="dictationApp.generateAndStart()"]');
+    // Navigation
+    prevItem() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.updateDictationUI();
+        }
+    }
+
+    nextItem() {
+        if (this.currentIndex < this.items.length - 1) {
+            this.currentIndex++;
+            this.updateDictationUI();
+        }
+    }
+
+    // Auto-play toggle on dictation page
+    toggleDictationAutoPlay() {
+        this.dictationAutoPlay = !this.dictationAutoPlay;
+        this.updateDictationAutoPlayUI();
+    }
+
+    updateDictationAutoPlayUI() {
+        const btn = document.getElementById('dictation-autoplay-btn');
         if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> 生成中...';
-        }
-
-        try {
-            const itemsToTTS = this.items.map(item => ({
-                text: item.word || item.sentence,
-                type: item.type,
-                id: item.id
-            }));
-
-            const response = await fetch('/api/tts/batch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    items: itemsToTTS,
-                    voice_id: this.voiceId,
-                    rate: this.speechRate,
-                    pitch: -5
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                data.results.forEach(result => {
-                    const item = this.items.find(i => i.id === result.id);
-                    if (item && result.success) {
-                        item.audio_url = result.audio_url;
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('TTS Error:', error);
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = `
-                    <div class="flex items-center justify-center rounded-full bg-white/20 p-1">
-                        <span class="material-symbols-outlined text-white text-[20px]">play_arrow</span>
-                    </div>
-                    <span class="text-lg font-bold text-white tracking-wide">生成音頻並開始</span>
-                    <div class="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                        <span class="material-symbols-outlined text-white">chevron_right</span>
-                    </div>
-                `;
+            if (this.dictationAutoPlay) {
+                btn.classList.remove('bg-gray-100', 'dark:bg-gray-700');
+                btn.classList.add('bg-primary');
+                btn.querySelector('.material-symbols-outlined').classList.add('text-white');
+                btn.querySelector('.text-xs').classList.add('text-white');
+                btn.querySelector('.text-xs').classList.remove('text-gray-600', 'dark:text-gray-300');
+            } else {
+                btn.classList.add('bg-gray-100', 'dark:bg-gray-700');
+                btn.classList.remove('bg-primary');
+                btn.querySelector('.material-symbols-outlined').classList.remove('text-white');
+                btn.querySelector('.text-xs').classList.remove('text-white');
+                btn.querySelector('.text-xs').classList.add('text-gray-600', 'dark:text-gray-300');
             }
         }
-    }
-
-    // ==================== DICTATION SESSION ====================
-    switchAudioMode(mode) {
-        // Just update the UI to show which mode is active
     }
 
     updateDictationUI() {
@@ -466,7 +667,6 @@ class DictationApp {
         const total = this.items.length;
         const progress = Math.round(((this.currentIndex + 1) / total) * 100);
 
-        // Update header info
         document.getElementById('session-number').textContent = this.currentIndex + 1;
         document.getElementById('session-title').textContent = 'Chapter 4 詞語';
         document.getElementById('current-item-num').textContent = this.currentIndex + 1;
@@ -474,12 +674,10 @@ class DictationApp {
         document.getElementById('progress-percent').textContent = progress + '%';
         document.getElementById('dictation-progress-bar').style.width = progress + '%';
 
-        // Update reveal section
         const text = item.word || item.sentence;
         document.getElementById('reveal-answer').textContent = text;
-        document.getElementById('reveal-pinyin').textContent = item.meaning || '';
+        document.getElementById('reveal-pinyin').textContent = item.phonetic || item.meaning || '';
 
-        // Reset play button
         this.updatePlayButton(false);
     }
 
@@ -504,6 +702,14 @@ class DictationApp {
             this.audioPlayer.onended = () => {
                 this.isPlaying = false;
                 this.updatePlayButton(false);
+
+                // Auto-play next item if enabled
+                if (this.dictationAutoPlay && this.currentIndex < this.items.length - 1) {
+                    setTimeout(() => {
+                        this.nextItem();
+                        this.playCurrentAudio();
+                    }, 1000);
+                }
             };
         }
     }
@@ -548,7 +754,6 @@ class DictationApp {
             this.mediaRecorder.start();
             this.isRecording = true;
 
-            // Update UI
             const btn = document.getElementById('record-btn-card');
             if (btn) {
                 btn.classList.add('recording');
@@ -567,7 +772,6 @@ class DictationApp {
             this.mediaRecorder.stop();
             this.isRecording = false;
 
-            // Update UI
             const btn = document.getElementById('record-btn-card');
             if (btn) {
                 btn.classList.remove('recording');
@@ -583,12 +787,10 @@ class DictationApp {
         result.isCorrect = isCorrect;
         result.userAnswer = result.userAnswer || '未作答';
 
-        // Add to wrong words if incorrect
         if (!isCorrect) {
             this.addWrongWord(result.word || result.sentence, result.meaning || '', result.userAnswer);
         }
 
-        // Visual feedback
         const main = document.querySelector('#page-dictation main');
         if (main) {
             main.classList.add(isCorrect ? 'bg-green-100' : 'bg-red-100', 'dark:bg-green-900/20', 'dark:bg-red-900/20');
@@ -597,11 +799,14 @@ class DictationApp {
             }, 500);
         }
 
-        // Move to next or finish
         setTimeout(() => {
             if (this.currentIndex < this.items.length - 1) {
                 this.currentIndex++;
                 this.updateDictationUI();
+                // Auto-play next if enabled
+                if (this.autoPlay || this.dictationAutoPlay) {
+                    setTimeout(() => this.playCurrentAudio(), 500);
+                }
             } else {
                 this.finishDictation();
             }
@@ -615,10 +820,8 @@ class DictationApp {
         const total = this.results.length;
         const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-        // Update statistics
         this.recordSession(correct, incorrect);
 
-        // Update headline based on accuracy
         const headline = document.getElementById('result-headline');
         if (accuracy >= 90) {
             headline.textContent = '太棒了！🎉';
@@ -628,7 +831,6 @@ class DictationApp {
             headline.textContent = '繼續加油！📚';
         }
 
-        // Update accuracy ring
         const ringLight = document.getElementById('accuracy-ring-light');
         const ringDark = document.getElementById('accuracy-ring-dark');
         if (ringLight) ringLight.style.background = `conic-gradient(#22c3c3 ${accuracy}%, #f1f5f9 0)`;
@@ -636,12 +838,10 @@ class DictationApp {
 
         document.getElementById('accuracy-display').innerHTML = `${accuracy}<span class="text-2xl align-top text-gray-400 ml-1">%</span>`;
 
-        // Update stats
         document.getElementById('perfect-count').textContent = correct;
         document.getElementById('review-count').textContent = incorrect;
         document.getElementById('mistakes-count').textContent = `${incorrect} 題`;
 
-        // Render mistakes list
         this.renderMistakesList();
 
         this.showPage('page-results');
@@ -684,6 +884,13 @@ class DictationApp {
     }
 
     async playMistakeAudio(text) {
+        // Check cache first
+        if (this.ttsCache.has(text)) {
+            this.audioPlayer.src = this.ttsCache.get(text);
+            this.audioPlayer.play();
+            return;
+        }
+
         try {
             const response = await fetch('/api/tts', {
                 method: 'POST',
@@ -698,8 +905,9 @@ class DictationApp {
 
             const data = await response.json();
             if (data.success && data.audio_url) {
-                const audio = new Audio(data.audio_url);
-                audio.play();
+                this.ttsCache.set(text, data.audio_url);
+                this.audioPlayer.src = data.audio_url;
+                this.audioPlayer.play();
             }
         } catch (error) {
             console.error('TTS Error:', error);
@@ -713,11 +921,10 @@ class DictationApp {
             return;
         }
 
-        // Filter items to only include mistakes
         this.items = mistakes.map((m, i) => ({
             ...m,
             id: i,
-            audio_url: null
+            audio_url: this.ttsCache.get(m.word || m.sentence) || null
         }));
 
         this.currentIndex = 0;
@@ -727,10 +934,19 @@ class DictationApp {
             isCorrect: null
         }));
 
-        this.generateAllAudio().then(() => {
+        // Generate audio for items not in cache
+        const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
+        if (itemsNeedingTTS.length > 0) {
+            this.showLoading('正在生成音頻...');
+            this.generateMissingAudio().then(() => {
+                this.hideLoading();
+                this.updateDictationUI();
+                this.showPage('page-dictation');
+            });
+        } else {
             this.updateDictationUI();
             this.showPage('page-dictation');
-        });
+        }
     }
 
     saveAndExit() {
@@ -780,7 +996,6 @@ class DictationApp {
             : 0;
         document.getElementById('stats-avg-accuracy').textContent = avgAccuracy + '%';
 
-        // Today
         const today = new Date().toDateString();
         const todayEntry = stats.history.find(h => h.date === today) || { correct: 0, wrong: 0 };
         document.getElementById('today-correct').textContent = todayEntry.correct;
@@ -863,7 +1078,7 @@ class DictationApp {
             meaning: w.meaning,
             type: 'word',
             id: i,
-            audio_url: null
+            audio_url: this.ttsCache.get(w.word) || null
         }));
 
         this.wrongWords.forEach(w => w.reviewCount++);
@@ -876,26 +1091,31 @@ class DictationApp {
             isCorrect: null
         }));
 
-        this.generateAllAudio().then(() => {
+        const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
+        if (itemsNeedingTTS.length > 0) {
+            this.showLoading('正在生成音頻...');
+            this.generateMissingAudio().then(() => {
+                this.hideLoading();
+                this.updateDictationUI();
+                this.showPage('page-dictation');
+            });
+        } else {
             this.updateDictationUI();
             this.showPage('page-dictation');
-        });
+        }
     }
 
     // ==================== DEMO ====================
     showResultsDemo() {
-        // Demo results for recent activity click
         this.finishDictation();
     }
 
     // ==================== EVENTS ====================
     bindEvents() {
-        // Image input
         document.getElementById('image-input').addEventListener('change', (e) => {
             this.handleImageFile(e.target.files[0]);
         });
 
-        // Audio player
         this.audioPlayer.addEventListener('ended', () => {
             this.isPlaying = false;
             this.updatePlayButton(false);
@@ -903,7 +1123,6 @@ class DictationApp {
     }
 }
 
-// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     window.dictationApp = new DictationApp();
 });
