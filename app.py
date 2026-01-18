@@ -615,7 +615,11 @@ def get_current_user():
 
 @app.route('/api/practice/record', methods=['POST'])
 def record_practice():
-    """Record a practice session"""
+    """Record a practice session - requires authentication"""
+    # Require authentication for practice recording
+    if not current_user.is_authenticated:
+        return jsonify({'success': False, 'message': '請先登錄以記錄練習成績'}), 401
+
     try:
         data = request.json
         title = data.get('title', '練習')
@@ -624,11 +628,21 @@ def record_practice():
         wrong_count = data.get('wrong_count', 0)
         words_data = data.get('words_data', [])
 
+        # Server-side validation
+        if total_items < 0 or correct_count < 0 or wrong_count < 0:
+            return jsonify({'success': False, 'message': '無效的數據'}), 400
+
+        if correct_count + wrong_count != total_items:
+            return jsonify({'success': False, 'message': '數據不一致'}), 400
+
+        # Validate session belongs to current user (session isolation)
+        user_id = current_user.id
+
         accuracy = 0 if total_items == 0 else round((correct_count / total_items) * 100, 1)
 
-        # Create practice session (user_id can be None for guest users)
+        # Create practice session linked to current user
         session = PracticeSession(
-            user_id=current_user.id if current_user.is_authenticated else None,
+            user_id=user_id,
             title=title,
             total_items=total_items,
             correct_count=correct_count,

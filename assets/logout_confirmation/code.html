@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logout Confirmation - AI Dictation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400,FILL@0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#22c3c3",
+            "background-light": "#fbfaf9",
+            "background-dark": "#212c2c",
+            "action-blue": "#3b82f6",
+            "action-red": "#ef4444"
+          },
+          fontFamily: {
+            "display": ["Plus Jakarta Sans", "sans-serif"]
+          },
+          borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      font-family: "Plus Jakarta Sans", sans-serif;
+    }
+    .modal-shadow {
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+    .custom-gradient-bg {
+      background: radial-gradient(circle at top left, #22c3c320 0%, transparent 40%),
+                  radial-gradient(circle at bottom right, #3b82f615 0%, transparent 40%);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col items-center justify-center p-6 custom-gradient-bg">
+<!-- Main Modal Container -->
+<div class="relative w-full max-w-[400px] bg-white dark:bg-[#2c3737] rounded-xl modal-shadow overflow-hidden flex flex-col border border-gray-100 dark:border-gray-800">
+<!-- Top AppBar Style Header (Integrated) -->
+<div class="flex items-center justify-between p-4 border-b border-gray-50 dark:border-gray-800">
+<div class="text-[#121717] dark:text-white flex size-10 shrink-0 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800">
+<span class="material-symbols-outlined text-lg">close</span>
+</div>
+<h2 class="text-[#121717] dark:text-white text-base font-bold leading-tight tracking-tight flex-1 text-center pr-10">Account</h2>
+</div>
+<!-- Content Section -->
+<div class="p-8 flex flex-col items-center">
+<!-- Friendly Illustration / Icon -->
+<div class="mb-6 relative">
+<div class="absolute inset-0 bg-primary/10 rounded-full scale-125 blur-xl"></div>
+<div class="relative w-32 h-32 bg-primary/20 rounded-full flex items-center justify-center text-primary overflow-hidden">
+<!-- Using an image placeholder for the friendly character -->
+<div class="w-full h-full bg-center bg-no-repeat bg-cover" data-alt="Friendly cartoon owl waving goodbye to user" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDgqWKKcx_iYsMWkYqvpQYkokkhzRlqULUIhxsDRxxf-oMiQGdkbgxud5PfSf_r1-xyGrGvjavbkMlgPVlkssDouqkPXpb67vH07uucRvW1QTdsLkG40ys30Yxzt8cBGju2WkjeDNedTGP30hWTSsQOsYviLCFPwEKKLGl2LW35lvx5tQ_T371yLQRb-URquQVWMRJRjqF_csFPegJzkBZuu85AhIHOQXsmtY50RBq6xgGGPvTVyaSgbwc1aaYVduUME83jXJ9U4ok");'>
+</div>
+</div>
+</div>
+<!-- Headline Text -->
+<h2 class="text-[#121717] dark:text-white tracking-tight text-2xl font-extrabold leading-tight text-center mb-3">
+        Leaving so soon?
+      </h2>
+<!-- Body Text -->
+<p class="text-gray-600 dark:text-gray-400 text-sm font-medium leading-relaxed text-center px-4 mb-8">
+        Don't worry, your child's progress is saved. We'll be ready for your next dictation session whenever you return!
+      </p>
+<!-- Button Group -->
+<div class="w-full space-y-3">
+<!-- Stay Logged In (Primary Action) -->
+<button class="flex h-14 w-full cursor-pointer items-center justify-center rounded-xl bg-action-blue text-white text-base font-bold leading-normal tracking-wide shadow-lg shadow-blue-500/20 active:scale-95 transition-transform">
+<span class="truncate">Stay Logged In</span>
+</button>
+<!-- Logout (Secondary Action) -->
+<button class="flex h-14 w-full cursor-pointer items-center justify-center rounded-xl border-2 border-action-red/20 bg-transparent text-action-red text-base font-bold leading-normal tracking-wide active:bg-red-50 dark:active:bg-red-950/20 transition-colors">
+<span class="truncate">Logout</span>
+</button>
+</div>
+</div>
+<!-- Decorative Bottom Bar -->
+<div class="h-2 bg-gradient-to-r from-primary via-action-blue to-primary/40"></div>
+</div>
+<!-- iOS Indicator Support -->
+<div class="mt-8 flex justify-center">
+<div class="w-32 h-1 bg-gray-300 dark:bg-gray-700 rounded-full opacity-40"></div>
+</div>
+</body></html>

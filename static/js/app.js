@@ -380,10 +380,21 @@ class DictationApp {
             return;
         }
 
-        container.innerHTML = items.map((item, index) => {
+        // Display up to 20 items regardless of login status
+        const displayItems = items.slice(0, 20);
+        const playButtonDisabled = !this.isLoggedIn ? 'opacity-50 cursor-not-allowed' : 'hover:text-primary';
+        const playButtonOnClick = !this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${'$&'})"`;
+
+        container.innerHTML = displayItems.map((item, index) => {
             const text = item.word || item.sentence;
             const phonetic = item.phonetic || '';
             const num = index + 1;
+
+            // For guest users, disable the play button
+            const playBtnClass = !this.isLoggedIn
+                ? 'play-audio-btn p-2 text-gray-300 cursor-not-allowed'
+                : 'play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700';
+            const playBtnOnClick = !this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${index})"`;
 
             return `
                 <div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-3 pr-2 rounded-xl shadow-soft border border-transparent hover:border-primary/30 transition-all">
@@ -395,7 +406,7 @@ class DictationApp {
                         ${phonetic ? `<div class="text-xs text-gray-400 font-mono">${phonetic}</div>` : ''}
                     </div>
                     <div class="flex items-center gap-1">
-                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${index})">
+                        <button class="${playBtnClass}" ${playBtnOnClick}>
                             <span class="material-symbols-outlined text-[20px]">volume_up</span>
                         </button>
                         <button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.deleteItem('${this.contentType}', ${index})">
@@ -405,6 +416,13 @@ class DictationApp {
                 </div>
             `;
         }).join('');
+
+        // Add info text if there are more than 20 items
+        if (items.length > 20) {
+            container.innerHTML += `
+                <div class="mt-2 text-xs text-gray-400 text-center">還有 ${items.length - 20} 項未顯示，請選擇最多 20 項</div>
+            `;
+        }
 
         // Add "Go to Selection" button
         container.innerHTML += `
@@ -436,9 +454,19 @@ class DictationApp {
         const wordsList = document.getElementById('words-selection-list');
         const sentencesList = document.getElementById('sentences-selection-list');
 
+        // Play button disabled for guest users
+        const playBtnClass = !this.isLoggedIn
+            ? 'play-audio-btn p-2 text-gray-300 cursor-not-allowed'
+            : 'play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700';
+        const playBtnOnClick = !this.isLoggedIn ? '' : 'onclick="dictationApp.handlePlayClick(this, \'%type%\', %index%)"';
+
+        // Display up to 20 items regardless of login status
+        const displayWords = this.allWords.slice(0, 20);
+        const displaySentences = this.allSentences.slice(0, 20);
+
         // Render words with play buttons
         if (wordsList) {
-            wordsList.innerHTML = this.allWords.map((item, index) => {
+            wordsList.innerHTML = displayWords.map((item, index) => {
                 const isSelected = this.selectedWordIndices.has(index);
                 return `
                     <div class="flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
@@ -449,7 +477,7 @@ class DictationApp {
                                 ${item.phonetic ? `<div class="text-xs text-gray-400 font-mono">${item.phonetic}</div>` : ''}
                             </div>
                         </button>
-                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, 'words', ${index})">
+                        <button class="${playBtnClass}" ${!this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, 'words', ${index})"`}>
                             <span class="material-symbols-outlined text-[20px]">volume_up</span>
                         </button>
                     </div>
@@ -459,7 +487,7 @@ class DictationApp {
 
         // Render sentences with play buttons
         if (sentencesList) {
-            sentencesList.innerHTML = this.allSentences.map((item, index) => {
+            sentencesList.innerHTML = displaySentences.map((item, index) => {
                 const isSelected = this.selectedSentenceIndices.has(index);
                 return `
                     <div class="flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
@@ -469,7 +497,7 @@ class DictationApp {
                                 <div class="font-semibold text-text-main dark:text-white">${item.sentence}</div>
                             </div>
                         </button>
-                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, 'sentences', ${index})">
+                        <button class="${playBtnClass}" ${!this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, 'sentences', ${index})"`}>
                             <span class="material-symbols-outlined text-[20px]">volume_up</span>
                         </button>
                     </div>
@@ -1465,15 +1493,38 @@ class DictationApp {
         if (user) {
             // Update header with user info
             const userNameEl = document.getElementById('user-name');
+            const userModeLabelEl = document.getElementById('user-mode-label');
             const userAvatarEl = document.getElementById('user-avatar');
+            const userBadgeEl = document.getElementById('user-badge');
+            const loginBtnEl = document.getElementById('login-btn');
+            const notificationsBtnEl = document.getElementById('notifications-btn');
 
             if (userNameEl) {
                 userNameEl.textContent = `${user.name} 👋`;
             }
+            if (userModeLabelEl) {
+                userModeLabelEl.textContent = '家長模式';
+            }
 
-            // Update avatar if provided
+            // Update avatar - replace icon with image
             if (userAvatarEl && user.avatar_url) {
+                userAvatarEl.innerHTML = '';
                 userAvatarEl.style.backgroundImage = `url('${user.avatar_url}')`;
+                userAvatarEl.style.borderColor = '#22c3c3';
+                userAvatarEl.classList.remove('bg-gray-100', 'dark:bg-gray-700');
+            }
+
+            // Show user badge (star)
+            if (userBadgeEl) {
+                userBadgeEl.classList.remove('hidden');
+            }
+
+            // Show notifications, hide login button
+            if (loginBtnEl) {
+                loginBtnEl.classList.add('hidden');
+            }
+            if (notificationsBtnEl) {
+                notificationsBtnEl.classList.remove('hidden');
             }
 
             // Update auth state
@@ -1483,6 +1534,44 @@ class DictationApp {
 
             // Store user info in localStorage
             localStorage.setItem('currentUser', JSON.stringify(user));
+        }
+    }
+
+    resetToGuestMode() {
+        const userNameEl = document.getElementById('user-name');
+        const userModeLabelEl = document.getElementById('user-mode-label');
+        const userAvatarEl = document.getElementById('user-avatar');
+        const userBadgeEl = document.getElementById('user-badge');
+        const loginBtnEl = document.getElementById('login-btn');
+        const notificationsBtnEl = document.getElementById('notifications-btn');
+
+        // Reset to guest mode display
+        if (userNameEl) {
+            userNameEl.textContent = 'Welcome 👋';
+        }
+        if (userModeLabelEl) {
+            userModeLabelEl.textContent = 'Guest Mode';
+        }
+
+        // Reset avatar to default icon
+        if (userAvatarEl) {
+            userAvatarEl.innerHTML = '<span class="material-symbols-outlined text-gray-400 dark:text-gray-500 text-2xl">account_circle</span>';
+            userAvatarEl.style.backgroundImage = 'none';
+            userAvatarEl.style.borderColor = '';
+            userAvatarEl.classList.add('bg-gray-100', 'dark:bg-gray-700');
+        }
+
+        // Hide user badge
+        if (userBadgeEl) {
+            userBadgeEl.classList.add('hidden');
+        }
+
+        // Show login button, hide notifications
+        if (loginBtnEl) {
+            loginBtnEl.classList.remove('hidden');
+        }
+        if (notificationsBtnEl) {
+            notificationsBtnEl.classList.add('hidden');
         }
     }
 
@@ -1498,26 +1587,63 @@ class DictationApp {
     // ==================== USER MENU ====================
     toggleUserMenu() {
         if (this.isLoggedIn) {
-            // Show user menu with logout option
-            if (confirm('是否要登出？')) {
-                this.logout();
-            }
+            // Show logout confirmation modal
+            this.showLogoutModal();
         } else {
             // Show auth modal
             this.toggleAuthModal();
         }
     }
 
-    async logout() {
+    showLogoutModal() {
+        const modal = document.getElementById('logout-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    closeLogoutModal() {
+        const modal = document.getElementById('logout-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    async confirmLogout() {
         try {
             const response = await fetch('/auth/logout');
-            if (response.redirected) {
-                // Clear localStorage and reload
+            if (response.redirected || response.ok) {
+                // Clear localStorage and reset UI
                 localStorage.removeItem('currentUser');
                 this.isLoggedIn = false;
                 this.maxWordSelection = 2;
                 this.maxSentenceSelection = 2;
-                window.location.href = response.url;
+                this.resetToGuestMode();
+
+                // Close modal
+                this.closeLogoutModal();
+
+                // Navigate to home page
+                this.showPage('page-home');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+
+    async logout() {
+        try {
+            const response = await fetch('/auth/logout');
+            if (response.redirected || response.ok) {
+                // Clear localStorage and reset UI
+                localStorage.removeItem('currentUser');
+                this.isLoggedIn = false;
+                this.maxWordSelection = 2;
+                this.maxSentenceSelection = 2;
+                this.resetToGuestMode();
+
+                // Navigate to home page
+                this.showPage('page-home');
             }
         } catch (error) {
             console.error('Logout error:', error);
