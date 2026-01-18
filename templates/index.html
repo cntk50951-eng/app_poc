@@ -129,10 +129,10 @@
                 <div>
                     <h1 class="text-3xl font-bold text-text-main dark:text-white tracking-tight">準備好<br/>練習了嗎？</h1>
                 </div>
-                <div class="bg-white dark:bg-surface-dark py-2 px-3 rounded-xl shadow-soft flex items-center gap-2 border border-gray-100 dark:border-gray-700">
+                <div id="streak-container" class="bg-white dark:bg-surface-dark py-2 px-3 rounded-xl shadow-soft flex items-center gap-2 border border-gray-100 dark:border-gray-700">
                     <span class="material-symbols-outlined text-orange-400" style="font-size: 18px;">local_fire_department</span>
                     <div class="flex flex-col items-start">
-                        <span class="text-xs font-bold text-text-main dark:text-white">3 天</span>
+                        <span id="streak-count" class="text-xs font-bold text-text-main dark:text-white">0 天</span>
                         <span class="text-[10px] text-text-sub dark:text-gray-400 font-medium">連續練習</span>
                     </div>
                 </div>
@@ -986,13 +986,60 @@
 
                 <!-- Buttons -->
                 <div class="w-full space-y-3">
-                    <button onclick="dictationApp.closeLogoutModal()" class="flex h-12 w-full items-center justify-center rounded-xl bg-action-blue text-white text-base font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
-                        Stay Logged In
-                    </button>
-                    <button onclick="dictationApp.confirmLogout()" class="flex h-12 w-full items-center justify-center rounded-xl border-2 border-action-red/30 bg-transparent text-action-red text-base font-bold active:bg-red-50 dark:active:bg-red-950/20 transition-colors">
+                    <button onclick="dictationApp.confirmLogout()" class="flex h-12 w-full items-center justify-center rounded-xl bg-action-red text-white text-base font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">
                         Logout
                     </button>
                 </div>
+            </div>
+
+            <!-- Decorative Bottom Bar -->
+            <div class="h-1.5 bg-gradient-to-r from-primary via-action-blue to-primary/50"></div>
+        </div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="profile-modal" class="hidden fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="relative w-full max-w-sm bg-white dark:bg-[#2c3737] rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+                <button onclick="dictationApp.closeProfileModal()" class="flex size-10 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    <span class="material-symbols-outlined text-text-main dark:text-white">close</span>
+                </button>
+                <h2 class="text-base font-bold leading-tight tracking-tight text-text-main dark:text-white flex-1 text-center pr-10">Profile</h2>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6 flex flex-col items-center">
+                <!-- Avatar -->
+                <div class="mb-4 relative">
+                    <div id="profile-avatar-display" class="w-24 h-24 rounded-full bg-cover bg-center border-4 border-primary" style="background-image: url('');"></div>
+                    <button onclick="document.getElementById('profile-avatar-input').click()" class="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white shadow-lg hover:bg-primary-dark transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">camera</span>
+                    </button>
+                    <input type="file" id="profile-avatar-input" accept="image/*" class="hidden" onchange="dictationApp.handleAvatarUpload(this)">
+                </div>
+
+                <!-- Nickname -->
+                <div class="w-full mb-6">
+                    <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 uppercase tracking-wider mb-2">Nickname</label>
+                    <input type="text" id="profile-nickname" class="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-text-main dark:text-white font-semibold focus:border-primary focus:ring-0 transition-colors" placeholder="Enter your nickname">
+                </div>
+
+                <!-- Email (read-only for Google users) -->
+                <div class="w-full mb-6">
+                    <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 uppercase tracking-wider mb-2">Email</label>
+                    <input type="email" id="profile-email" class="w-full bg-gray-100 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-text-main dark:text-gray-400 font-semibold focus:ring-0 cursor-not-allowed" placeholder="Email" readonly>
+                </div>
+
+                <!-- Save Button -->
+                <button onclick="dictationApp.saveProfile()" class="w-full flex h-12 items-center justify-center rounded-xl bg-primary text-white text-base font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                    Save Changes
+                </button>
+
+                <!-- Logout Button -->
+                <button onclick="dictationApp.showLogoutModal()" class="w-full mt-3 flex h-12 items-center justify-center rounded-xl border-2 border-action-red/30 bg-transparent text-action-red text-base font-bold active:bg-red-50 dark:active:bg-red-950/20 transition-colors">
+                    Logout
+                </button>
             </div>
 
             <!-- Decorative Bottom Bar -->

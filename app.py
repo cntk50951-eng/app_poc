@@ -613,6 +613,80 @@ def get_current_user():
     return jsonify({'success': False, 'message': 'Not logged in'})
 
 
+@app.route('/auth/update-profile', methods=['POST'])
+@login_required
+def update_profile():
+    """Update user profile (name)"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+
+        if not name:
+            return jsonify({'success': False, 'message': '請輸入暱稱'}), 400
+
+        if len(name) > 50:
+            return jsonify({'success': 'False', 'message': '暱稱不能超過 50 個字符'}), 400
+
+        current_user.name = name
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': current_user.id,
+                'email': current_user.email,
+                'name': current_user.name,
+                'avatar_url': current_user.avatar_url
+            }
+        })
+    except Exception as e:
+        print(f"Update profile error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '更新失敗'}), 500
+
+
+@app.route('/auth/upload-avatar', methods=['POST'])
+@login_required
+def upload_avatar():
+    """Upload user avatar"""
+    try:
+        if 'avatar' not in request.files:
+            return jsonify({'success': False, 'message': '請選擇圖片'}), 400
+
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '請選擇圖片'}), 400
+
+        # Validate file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        if ext not in allowed_extensions:
+            return jsonify({'success': False, 'message': '不支持的圖片格式'}), 400
+
+        # Generate filename
+        filename = f"avatar_{current_user.id}_{int(__import__('time').time())}.{ext}"
+        upload_path = os.path.join('static', 'uploads', 'avatars')
+        os.makedirs(upload_path, exist_ok=True)
+        filepath = os.path.join(upload_path, filename)
+
+        # Save file
+        file.save(filepath)
+
+        # Update user avatar_url
+        avatar_url = f"/static/uploads/avatars/{filename}"
+        current_user.avatar_url = avatar_url
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'avatar_url': avatar_url
+        })
+    except Exception as e:
+        print(f"Upload avatar error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '上傳失敗'}), 500
+
+
 @app.route('/api/practice/record', methods=['POST'])
 def record_practice():
     """Record a practice session - requires authentication"""
@@ -699,6 +773,8 @@ def get_practice_stats():
         if not current_user.is_authenticated:
             return jsonify({'success': False, 'message': 'Not logged in'}), 401
 
+        from datetime import datetime, timedelta
+
         sessions = PracticeSession.query.filter_by(user_id=current_user.id).all()
 
         total_sessions = len(sessions)
@@ -715,8 +791,10 @@ def get_practice_stats():
         today_total = today_correct + today_wrong
         today_accuracy = round((today_correct / today_total * 100), 1) if today_total > 0 else 0
 
+        # Calculate streak
+        streak = calculate_streak(sessions)
+
         # Recent history (last 30 days)
-        from datetime import datetime, timedelta
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         recent_sessions = PracticeSession.query\
             .filter_by(user_id=current_user.id)\
@@ -746,12 +824,62 @@ def get_practice_stats():
                 'today_correct': today_correct,
                 'today_wrong': today_wrong,
                 'today_accuracy': today_accuracy,
+                'streak': streak,
                 'history': history
             }
         })
     except Exception as e:
         print(f"Get practice stats error: {e}")
         return jsonify({'success': False, 'message': '獲取統計失敗'}), 500
+
+
+def calculate_streak(sessions):
+    """Calculate consecutive practice days streak"""
+    if not sessions:
+        return 0
+
+    from datetime import datetime, timedelta
+
+    # Group sessions by date (using date only, not time)
+    practice_dates = set()
+    for session in sessions:
+        # Get the date in local timezone
+        date_val = session.created_at.date() if hasattr(session.created_at, 'date') else session.created_at
+        practice_dates.add(date_val)
+
+    if not practice_dates:
+        return 0
+
+    # Sort dates in descending order (most recent first)
+    sorted_dates = sorted(practice_dates, reverse=True)
+    today = datetime.now().date()
+
+    # Check if practiced today or yesterday (streak is still valid)
+    most_recent = sorted_dates[0]
+    if most_recent < today - timedelta(days=1):
+        return 0  # Streak broken
+
+    # Count consecutive days
+    streak = 0
+    current_date = most_recent
+
+    # If practiced today, count it
+    if current_date == today:
+        streak += 1
+        current_date = today - timedelta(days=1)
+    elif current_date == today - timedelta(days=1):
+        # Practiced yesterday but not today, streak is still valid
+        streak += 1
+        current_date = today - timedelta(days=2)
+    else:
+        return 0
+
+    # Count backwards
+    while current_date in sorted_dates:
+        streak += 1
+        current_date -= timedelta(days=1)
+
+    return streak
 
 
 # ==================== MAIN ====================

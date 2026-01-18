@@ -60,6 +60,7 @@ class DictationApp {
         this.applyDarkMode();
         this.updateStatsDisplay();
         this.updateWrongWordsDisplay();
+        this.loadStreak();
 
         // Check if redirected from Google OAuth
         const urlParams = new URLSearchParams(window.location.search);
@@ -99,6 +100,31 @@ class DictationApp {
             } catch (e) {
                 console.error('Error parsing user data:', e);
             }
+        }
+    }
+
+    async loadStreak() {
+        if (!this.isLoggedIn) {
+            // Show disabled state for guests
+            const streakCountEl = document.getElementById('streak-count');
+            if (streakCountEl) {
+                streakCountEl.textContent = '0 天';
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/practice/stats');
+            const data = await response.json();
+            if (data.success && data.stats) {
+                const streakCountEl = document.getElementById('streak-count');
+                if (streakCountEl) {
+                    const streak = data.stats.streak || 0;
+                    streakCountEl.textContent = `${streak} 天`;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading streak:', error);
         }
     }
 
@@ -1527,10 +1553,17 @@ class DictationApp {
                 notificationsBtnEl.classList.remove('hidden');
             }
 
-            // Update auth state
+            // Update auth state and selection limits
             this.isLoggedIn = true;
             this.maxWordSelection = 20;
             this.maxSentenceSelection = 20;
+
+            // Refresh selection page if visible
+            const selectionPage = document.getElementById('page-selection');
+            if (selectionPage && !selectionPage.classList.contains('hidden')) {
+                this.updateSelectionCounts();
+                this.renderSelectionList();
+            }
 
             // Store user info in localStorage
             localStorage.setItem('currentUser', JSON.stringify(user));
@@ -1587,8 +1620,8 @@ class DictationApp {
     // ==================== USER MENU ====================
     toggleUserMenu() {
         if (this.isLoggedIn) {
-            // Show logout confirmation modal
-            this.showLogoutModal();
+            // Show profile modal
+            this.showProfileModal();
         } else {
             // Show auth modal
             this.toggleAuthModal();
@@ -1596,6 +1629,8 @@ class DictationApp {
     }
 
     showLogoutModal() {
+        // Close profile modal first
+        this.closeProfileModal();
         const modal = document.getElementById('logout-modal');
         if (modal) {
             modal.classList.remove('hidden');
@@ -1609,9 +1644,132 @@ class DictationApp {
         }
     }
 
+    // ==================== PROFILE MODAL ====================
+    showProfileModal() {
+        const currentUser = localStorage.getItem('currentUser');
+        if (currentUser) {
+            const user = JSON.parse(currentUser);
+            const avatarDisplay = document.getElementById('profile-avatar-display');
+            const nicknameInput = document.getElementById('profile-nickname');
+            const emailInput = document.getElementById('profile-email');
+
+            if (avatarDisplay && user.avatar_url) {
+                avatarDisplay.style.backgroundImage = `url('${user.avatar_url}')`;
+            }
+            if (nicknameInput) {
+                nicknameInput.value = user.name || '';
+            }
+            if (emailInput) {
+                emailInput.value = user.email || '';
+            }
+        }
+        const modal = document.getElementById('profile-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    closeProfileModal() {
+        const modal = document.getElementById('profile-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    async handleAvatarUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        // Show loading
+        this.showLoading('上傳頭像中...');
+
+        try {
+            const formData = new FormData();
+            formData.append('avatar', file);
+
+            const response = await fetch('/auth/upload-avatar', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                // Update local user data
+                const currentUser = localStorage.getItem('currentUser');
+                if (currentUser) {
+                    const user = JSON.parse(currentUser);
+                    user.avatar_url = data.avatar_url;
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+
+                    // Update display
+                    this.updateUserDisplay(user);
+                    this.showProfileModal();
+                }
+                this.hideLoading();
+            } else {
+                this.hideLoading();
+                alert(data.message || '上傳失敗');
+            }
+        } catch (error) {
+            this.hideLoading();
+            console.error('Avatar upload error:', error);
+            alert('上傳失敗，請重試');
+        }
+    }
+
+    async saveProfile() {
+        const nicknameInput = document.getElementById('profile-nickname');
+        const nickname = nicknameInput ? nicknameInput.value.trim() : '';
+
+        if (!nickname) {
+            alert('請輸入暱稱');
+            return;
+        }
+
+        this.showLoading('保存中...');
+
+        try {
+            const response = await fetch('/auth/update-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: nickname })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                // Update local user data
+                const currentUser = localStorage.getItem('currentUser');
+                if (currentUser) {
+                    const user = JSON.parse(currentUser);
+                    user.name = data.user.name;
+                    user.avatar_url = data.user.avatar_url;
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+
+                    // Update display
+                    this.updateUserDisplay(user);
+                }
+                this.hideLoading();
+                this.closeProfileModal();
+                alert('資料已更新！');
+            } else {
+                this.hideLoading();
+                alert(data.message || '保存失敗');
+            }
+        } catch (error) {
+            this.hideLoading();
+            console.error('Save profile error:', error);
+            alert('保存失敗，請重試');
+        }
+    }
+
     async confirmLogout() {
+        // Show loading before making the request
+        this.showLoading('登出中...');
+
         try {
             const response = await fetch('/auth/logout');
+            this.hideLoading();
+
             if (response.redirected || response.ok) {
                 // Clear localStorage and reset UI
                 localStorage.removeItem('currentUser');
@@ -1627,6 +1785,7 @@ class DictationApp {
                 this.showPage('page-home');
             }
         } catch (error) {
+            this.hideLoading();
             console.error('Logout error:', error);
         }
     }
