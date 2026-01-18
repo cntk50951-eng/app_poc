@@ -34,22 +34,29 @@ def perform_ocr(image_data):
         # Decode base64 to bytes
         image_bytes = base64.b64decode(image_data)
 
-        # OCR.space API
+        # OCR.space API - Support multilingual (English + Chinese Simplified)
         url = "https://api.ocr.space/parse/image"
         headers = {'apikey': OCR_SPACE_API_KEY}
         files = {'file': ('image.jpg', image_bytes, 'image/jpeg')}
-        data = {'language': 'eng', 'detectorientation': 'true', 'scale': 'true'}
+        # Use 'eng' for English, 'chi_sim' for Chinese, 'auto' for auto-detection
+        data = {'language': 'eng', 'detectorientation': 'true', 'scale': 'true', 'OCREngine': '2'}
 
-        response = requests.post(url, headers=headers, files=files, data=data)
+        response = requests.post(url, headers=headers, files=files, data=data, timeout=30)
         result = response.json()
 
+        # Check for errors
         if result.get('IsErroredOnProcessing'):
-            raise Exception(f"OCR Error: {result.get('ErrorMessage', 'Unknown error')}")
+            error_msg = result.get('ErrorMessage', 'Unknown OCR error')
+            raise Exception(f"OCR Error: {error_msg}")
 
-        if result.get('ParsedResults'):
-            return result['ParsedResults'][0].get('ParsedText', '')
+        if result.get('ParsedResults') and len(result.get('ParsedResults', [])) > 0:
+            parsed_text = result['ParsedResults'][0].get('ParsedText', '')
+            return parsed_text
         else:
-            raise Exception("No OCR results found")
+            # Try alternative: check if there's an error in a different field
+            if result.get('ErrorMessage'):
+                raise Exception(f"OCR Error: {result['ErrorMessage']}")
+            raise Exception("No OCR results found - the image may be too small or unclear")
 
     except Exception as e:
         print(f"OCR Error: {e}")

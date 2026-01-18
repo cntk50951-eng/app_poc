@@ -245,10 +245,46 @@ class DictationApp {
         }
     }
 
+    // ==================== ERROR BANNER ====================
+    showErrorBanner(message) {
+        const banner = document.getElementById('ocr-error-banner');
+        const msgEl = document.getElementById('ocr-error-message');
+        if (banner && msgEl) {
+            msgEl.textContent = message;
+            banner.classList.remove('hidden');
+        }
+    }
+
+    hideErrorBanner() {
+        const banner = document.getElementById('ocr-error-banner');
+        if (banner) {
+            banner.classList.add('hidden');
+        }
+    }
+
+    // ==================== IMAGE PREVIEW ====================
+    showImagePreview() {
+        if (!this.imageData) return;
+        const modal = document.getElementById('image-preview-modal');
+        const img = document.getElementById('preview-image');
+        if (modal && img) {
+            img.src = this.imageData;
+            modal.classList.remove('hidden');
+        }
+    }
+
+    hideImagePreview() {
+        const modal = document.getElementById('image-preview-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
     // ==================== OCR ====================
     async performOCR() {
         if (!this.imageData) return;
 
+        this.hideErrorBanner();
         this.showLoading('正在識別文字內容...');
 
         try {
@@ -272,12 +308,12 @@ class DictationApp {
                 this.renderContentList();
             } else {
                 this.hideLoading();
-                alert('OCR 識別失敗，請重試');
+                this.showErrorBanner(data.error || 'OCR 識別失敗，請重試');
             }
         } catch (error) {
             this.hideLoading();
             console.error('OCR Error:', error);
-            alert('OCR 識別失敗：' + error.message);
+            this.showErrorBanner('OCR 識別失敗：' + error.message);
         }
     }
 
@@ -314,7 +350,7 @@ class DictationApp {
                         ${phonetic ? `<div class="text-xs text-gray-400 font-mono">${phonetic}</div>` : ''}
                     </div>
                     <div class="flex items-center gap-1">
-                        <button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.playItemAudio('${this.contentType}', ${index})">
+                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${index})">
                             <span class="material-symbols-outlined text-[20px]">volume_up</span>
                         </button>
                         <button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.deleteItem('${this.contentType}', ${index})">
@@ -336,6 +372,10 @@ class DictationApp {
         this.hideLoading();
     }
 
+    handlePlayClick(buttonElement, type, index) {
+        this.playItemAudio(type, index, buttonElement);
+    }
+
     goToSelection() {
         this.showPage('page-selection');
         this.renderSelectionList();
@@ -345,32 +385,42 @@ class DictationApp {
         const wordsList = document.getElementById('words-selection-list');
         const sentencesList = document.getElementById('sentences-selection-list');
 
-        // Render words
+        // Render words with play buttons
         if (wordsList) {
             wordsList.innerHTML = this.allWords.map((item, index) => {
                 const isSelected = this.selectedWordIndices.has(index);
                 return `
-                    <div onclick="dictationApp.toggleWordSelection(${index})" class="cursor-pointer flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
-                        <div class="flex-1">
-                            <div class="font-semibold text-text-main dark:text-white">${item.word}</div>
-                            ${item.phonetic ? `<div class="text-xs text-gray-400 font-mono">${item.phonetic}</div>` : ''}
-                        </div>
-                        <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <div class="flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
+                        <button onclick="event.stopPropagation(); dictationApp.toggleWordSelection(${index})" class="flex-1 flex items-center gap-3 cursor-pointer">
+                            <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                            <div class="flex-1 text-left">
+                                <div class="font-semibold text-text-main dark:text-white">${item.word}</div>
+                                ${item.phonetic ? `<div class="text-xs text-gray-400 font-mono">${item.phonetic}</div>` : ''}
+                            </div>
+                        </button>
+                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, 'words', ${index})">
+                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                        </button>
                     </div>
                 `;
             }).join('');
         }
 
-        // Render sentences
+        // Render sentences with play buttons
         if (sentencesList) {
             sentencesList.innerHTML = this.allSentences.map((item, index) => {
                 const isSelected = this.selectedSentenceIndices.has(index);
                 return `
-                    <div onclick="dictationApp.toggleSentenceSelection(${index})" class="cursor-pointer flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
-                        <div class="flex-1">
-                            <div class="font-semibold text-text-main dark:text-white">${item.sentence}</div>
-                        </div>
-                        <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <div class="flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-surface-dark'}">
+                        <button onclick="event.stopPropagation(); dictationApp.toggleSentenceSelection(${index})" class="flex-1 flex items-center gap-3 cursor-pointer">
+                            <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+                            <div class="flex-1 text-left">
+                                <div class="font-semibold text-text-main dark:text-white">${item.sentence}</div>
+                            </div>
+                        </button>
+                        <button class="play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" onclick="dictationApp.handlePlayClick(this, 'sentences', ${index})">
+                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -569,7 +619,7 @@ class DictationApp {
     }
 
     // ==================== AUDIO PLAYBACK ====================
-    async playItemAudio(type, index) {
+    async playItemAudio(type, index, buttonElement) {
         const items = type === 'words' ? this.allWords : this.allSentences;
         const item = items[index];
         const text = item.word || item.sentence;
@@ -579,6 +629,16 @@ class DictationApp {
             this.audioPlayer.src = this.ttsCache.get(text);
             this.audioPlayer.play();
             return;
+        }
+
+        // Show loading animation on button
+        if (buttonElement) {
+            buttonElement.disabled = true;
+            const icon = buttonElement.querySelector('.material-symbols-outlined');
+            if (icon) {
+                icon.textContent = 'hourglass_empty';
+                icon.classList.add('animate-spin');
+            }
         }
 
         // Generate new TTS
@@ -603,6 +663,16 @@ class DictationApp {
             }
         } catch (error) {
             console.error('TTS Error:', error);
+        } finally {
+            // Restore button state
+            if (buttonElement) {
+                buttonElement.disabled = false;
+                const icon = buttonElement.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.textContent = 'volume_up';
+                    icon.classList.remove('animate-spin');
+                }
+            }
         }
     }
 
@@ -661,20 +731,23 @@ class DictationApp {
     }
 
     updateDictationUI() {
-        if (!this.items[this.currentIndex]) return;
+        if (!this.items || this.items.length === 0) return;
+        if (this.currentIndex < 0 || this.currentIndex >= this.items.length) this.currentIndex = 0;
 
         const item = this.items[this.currentIndex];
+        if (!item) return;
+
         const total = this.items.length;
         const progress = Math.round(((this.currentIndex + 1) / total) * 100);
 
         document.getElementById('session-number').textContent = this.currentIndex + 1;
-        document.getElementById('session-title').textContent = 'Chapter 4 詞語';
+        document.getElementById('session-title').textContent = item.type === 'word' ? 'Chapter 4 詞語' : 'Chapter 4 句子';
         document.getElementById('current-item-num').textContent = this.currentIndex + 1;
         document.getElementById('total-items-num').textContent = total;
         document.getElementById('progress-percent').textContent = progress + '%';
         document.getElementById('dictation-progress-bar').style.width = progress + '%';
 
-        const text = item.word || item.sentence;
+        const text = item.word || item.sentence || '---';
         document.getElementById('reveal-answer').textContent = text;
         document.getElementById('reveal-pinyin').textContent = item.phonetic || item.meaning || '';
 
