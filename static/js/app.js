@@ -60,9 +60,33 @@ class DictationApp {
         this.applyDarkMode();
         this.updateStatsDisplay();
         this.updateWrongWordsDisplay();
+
+        // Check if redirected from Google OAuth
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('logged_in') === 'true') {
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // Fetch user data from server
+            this.fetchCurrentUser();
+        }
     }
 
     // ==================== AUTH STATUS ====================
+    async fetchCurrentUser() {
+        try {
+            const response = await fetch('/auth/current-user');
+            const data = await response.json();
+            if (data.success && data.user) {
+                this.isLoggedIn = true;
+                this.maxWordSelection = 20;
+                this.maxSentenceSelection = 20;
+                this.updateUserDisplay(data.user);
+            }
+        } catch (error) {
+            console.error('Error fetching current user:', error);
+        }
+    }
+
     checkAuthStatus() {
         const currentUser = localStorage.getItem('currentUser');
         if (currentUser) {
@@ -1440,14 +1464,16 @@ class DictationApp {
     updateUserDisplay(user) {
         if (user) {
             // Update header with user info
-            const userNameEl = document.querySelector('#page-home header h2');
-            const userModeEl = document.querySelector('#page-home header p');
+            const userNameEl = document.getElementById('user-name');
+            const userAvatarEl = document.getElementById('user-avatar');
 
             if (userNameEl) {
                 userNameEl.textContent = `${user.name} 👋`;
             }
-            if (userModeEl) {
-                userModeEl.textContent = '家長模式';
+
+            // Update avatar if provided
+            if (userAvatarEl && user.avatar_url) {
+                userAvatarEl.style.backgroundImage = `url('${user.avatar_url}')`;
             }
 
             // Update auth state
@@ -1466,6 +1492,35 @@ class DictationApp {
             this.toggleAuthModal();
         } else {
             this.showPage('page-stats');
+        }
+    }
+
+    // ==================== USER MENU ====================
+    toggleUserMenu() {
+        if (this.isLoggedIn) {
+            // Show user menu with logout option
+            if (confirm('是否要登出？')) {
+                this.logout();
+            }
+        } else {
+            // Show auth modal
+            this.toggleAuthModal();
+        }
+    }
+
+    async logout() {
+        try {
+            const response = await fetch('/auth/logout');
+            if (response.redirected) {
+                // Clear localStorage and reload
+                localStorage.removeItem('currentUser');
+                this.isLoggedIn = false;
+                this.maxWordSelection = 2;
+                this.maxSentenceSelection = 2;
+                window.location.href = response.url;
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
         }
     }
 
