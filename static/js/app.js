@@ -23,10 +23,11 @@ class DictationApp {
         this.slowModeSpeed = 0.5;
         this.audioPlayer = document.getElementById('audio-player');
 
-        // Selection state
+        // Selection state - limits based on login status
         this.selectedWordIndices = new Set();
         this.selectedSentenceIndices = new Set();
-        this.maxSelection = 2;
+        this.maxWordSelection = 2;  // Guest: 2, Logged in: 20
+        this.maxSentenceSelection = 2;  // Guest: 2, Logged in: 20
 
         // TTS cache - track which items have already been generated
         this.ttsCache = new Map(); // key: text, value: audio_url
@@ -46,15 +47,35 @@ class DictationApp {
         this.recordedAudio = null;
         this.isRecording = false;
 
+        // Auth state
+        this.isLoggedIn = false;
+
         this.init();
     }
 
     init() {
         this.loadSettings();
+        this.checkAuthStatus();
         this.bindEvents();
         this.applyDarkMode();
         this.updateStatsDisplay();
         this.updateWrongWordsDisplay();
+    }
+
+    // ==================== AUTH STATUS ====================
+    checkAuthStatus() {
+        const currentUser = localStorage.getItem('currentUser');
+        if (currentUser) {
+            try {
+                const user = JSON.parse(currentUser);
+                this.isLoggedIn = true;
+                this.maxWordSelection = 20;
+                this.maxSentenceSelection = 20;
+                this.updateUserDisplay(user);
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+            }
+        }
     }
 
     // ==================== SETTINGS ====================
@@ -377,6 +398,12 @@ class DictationApp {
     }
 
     goToSelection() {
+        // Update limit displays based on login status
+        const wordLimitEl = document.getElementById('word-limit-display');
+        const sentenceLimitEl = document.getElementById('sentence-limit-display');
+        if (wordLimitEl) wordLimitEl.textContent = this.maxWordSelection;
+        if (sentenceLimitEl) sentenceLimitEl.textContent = this.maxSentenceSelection;
+
         this.showPage('page-selection');
         this.renderSelectionList();
     }
@@ -433,7 +460,7 @@ class DictationApp {
         if (this.selectedWordIndices.has(index)) {
             this.selectedWordIndices.delete(index);
         } else {
-            if (this.selectedWordIndices.size >= this.maxSelection) {
+            if (this.selectedWordIndices.size >= this.maxWordSelection) {
                 // Remove oldest selection
                 const firstIndex = this.selectedWordIndices.values().next().value;
                 this.selectedWordIndices.delete(firstIndex);
@@ -447,7 +474,7 @@ class DictationApp {
         if (this.selectedSentenceIndices.has(index)) {
             this.selectedSentenceIndices.delete(index);
         } else {
-            if (this.selectedSentenceIndices.size >= this.maxSelection) {
+            if (this.selectedSentenceIndices.size >= this.maxSentenceSelection) {
                 const firstIndex = this.selectedSentenceIndices.values().next().value;
                 this.selectedSentenceIndices.delete(firstIndex);
             }
@@ -462,8 +489,8 @@ class DictationApp {
         const totalSelected = document.getElementById('total-selected');
         const startBtn = document.getElementById('start-selected-btn');
 
-        if (wordsCount) wordsCount.textContent = `(${this.selectedWordIndices.size}/${this.maxSelection})`;
-        if (sentencesCount) sentencesCount.textContent = `(${this.selectedSentenceIndices.size}/${this.maxSelection})`;
+        if (wordsCount) wordsCount.textContent = `(${this.selectedWordIndices.size}/${this.maxWordSelection})`;
+        if (sentencesCount) sentencesCount.textContent = `(${this.selectedSentenceIndices.size}/${this.maxSentenceSelection})`;
 
         const total = this.selectedWordIndices.size + this.selectedSentenceIndices.size;
         if (totalSelected) totalSelected.textContent = total;
@@ -974,6 +1001,11 @@ class DictationApp {
 
         this.recordSession(correct, incorrect);
 
+        // Record practice session to server (if logged in)
+        if (this.isLoggedIn) {
+            this.recordPracticeSession(correct, incorrect);
+        }
+
         const headline = document.getElementById('result-headline');
         if (accuracy >= 90) {
             headline.textContent = '太棒了！🎉';
@@ -1418,8 +1450,60 @@ class DictationApp {
                 userModeEl.textContent = '家長模式';
             }
 
+            // Update auth state
+            this.isLoggedIn = true;
+            this.maxWordSelection = 20;
+            this.maxSentenceSelection = 20;
+
             // Store user info in localStorage
             localStorage.setItem('currentUser', JSON.stringify(user));
+        }
+    }
+
+    // ==================== STATS LOGIN CHECK ====================
+    checkLoginForStats() {
+        if (!this.isLoggedIn) {
+            this.toggleAuthModal();
+        } else {
+            this.showPage('page-stats');
+        }
+    }
+
+    // ==================== PRACTICE RECORDING ====================
+    async recordPracticeSession(correct, wrong) {
+        const total = correct + wrong;
+        const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+        // Prepare words data (only wrong answers)
+        const wordsData = this.results
+            .filter(r => r.isCorrect === false)
+            .map(r => ({
+                word: r.word || r.sentence,
+                userAnswer: r.userAnswer || ''
+            }));
+
+        try {
+            const response = await fetch('/api/practice/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: `練習 ${new Date().toLocaleDateString('zh-HK')}`,
+                    total_items: total,
+                    correct_count: correct,
+                    wrong_count: wrong,
+                    accuracy: accuracy,
+                    words_data: wordsData.length > 0 ? JSON.stringify(wordsData) : null
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                console.log('Practice session recorded successfully');
+            } else {
+                console.error('Failed to record practice session:', data.error);
+            }
+        } catch (error) {
+            console.error('Error recording practice session:', error);
         }
     }
 

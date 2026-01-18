@@ -187,7 +187,7 @@
                     <span class="material-symbols-outlined fill-current">home</span>
                 </div>
             </button>
-            <button class="flex flex-col items-center gap-1 group" onclick="dictationApp.showPage('page-stats')">
+            <button class="flex flex-col items-center gap-1 group" onclick="dictationApp.checkLoginForStats()">
                 <div class="w-10 h-10 flex items-center justify-center rounded-full text-gray-400 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                     <span class="material-symbols-outlined">bar_chart</span>
                 </div>
@@ -690,7 +690,9 @@
         </header>
 
         <main class="px-4 py-4 pb-32">
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">選擇最多 2 項用於聽寫練習</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                選擇最多 <span id="word-limit-display">2</span> 個單詞和 <span id="sentence-limit-display">2</span> 個句子
+            </p>
 
             <!-- Words Selection -->
             <div id="words-selection" class="mb-6">

@@ -62,11 +62,27 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
+    # Relationship to practice sessions
+    practice_sessions = db.relationship('PracticeSession', backref='user', lazy='dynamic')
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password) if self.password_hash else False
+
+
+class PracticeSession(db.Model):
+    """Record of each dictation practice session"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)  # Nullable for guest users
+    title = db.Column(db.String(255), nullable=False)  # e.g., "P3 English Ch.4"
+    total_items = db.Column(db.Integer, nullable=False)
+    correct_count = db.Column(db.Integer, nullable=False)
+    wrong_count = db.Column(db.Integer, nullable=False)
+    accuracy = db.Column(db.Float, nullable=False)  # Percentage 0-100
+    words_data = db.Column(db.Text, nullable=True)  # JSON string of words in session
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 
 @login_manager.user_loader
@@ -477,7 +493,8 @@ def google_callback():
             db.session.commit()
 
         login_user(user)
-        return redirect(url_for('index'))
+        # Redirect with a query param to trigger page reload
+        return redirect(url_for('index', logged_in='true'))
     except Exception as e:
         print(f"Google OAuth callback error: {e}")
         return redirect(url_for('index'))
@@ -594,6 +611,133 @@ def get_current_user():
             }
         })
     return jsonify({'success': False, 'message': 'Not logged in'})
+
+
+@app.route('/api/practice/record', methods=['POST'])
+def record_practice():
+    """Record a practice session"""
+    try:
+        data = request.json
+        title = data.get('title', '練習')
+        total_items = data.get('total_items', 0)
+        correct_count = data.get('correct_count', 0)
+        wrong_count = data.get('wrong_count', 0)
+        words_data = data.get('words_data', [])
+
+        accuracy = 0 if total_items == 0 else round((correct_count / total_items) * 100, 1)
+
+        # Create practice session (user_id can be None for guest users)
+        session = PracticeSession(
+            user_id=current_user.id if current_user.is_authenticated else None,
+            title=title,
+            total_items=total_items,
+            correct_count=correct_count,
+            wrong_count=wrong_count,
+            accuracy=accuracy,
+            words_data=json.dumps(words_data) if words_data else None
+        )
+        db.session.add(session)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'session_id': session.id
+        })
+    except Exception as e:
+        print(f"Record practice error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '記錄失敗'}), 500
+
+
+@app.route('/api/practice/history')
+def get_practice_history():
+    """Get practice history for current user"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+        sessions = PracticeSession.query.filter_by(user_id=current_user.id)\
+            .order_by(PracticeSession.created_at.desc())\
+            .limit(50)\
+            .all()
+
+        return jsonify({
+            'success': True,
+            'sessions': [{
+                'id': s.id,
+                'title': s.title,
+                'total_items': s.total_items,
+                'correct_count': s.correct_count,
+                'wrong_count': s.wrong_count,
+                'accuracy': s.accuracy,
+                'created_at': s.created_at.isoformat()
+            } for s in sessions]
+        })
+    except Exception as e:
+        print(f"Get practice history error: {e}")
+        return jsonify({'success': False, 'message': '獲取歷史失敗'}), 500
+
+
+@app.route('/api/practice/stats')
+def get_practice_stats():
+    """Get practice statistics for current user"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+        sessions = PracticeSession.query.filter_by(user_id=current_user.id).all()
+
+        total_sessions = len(sessions)
+        total_correct = sum(s.correct_count for s in sessions)
+        total_wrong = sum(s.wrong_count for s in sessions)
+        total_items = total_correct + total_wrong
+        avg_accuracy = round((total_correct / total_items * 100), 1) if total_items > 0 else 0
+
+        # Today's stats
+        today = db.func.date(PracticeSession.created_at) == db.func.current_date()
+        today_sessions = PracticeSession.query.filter_by(user_id=current_user.id).filter(today).all()
+        today_correct = sum(s.correct_count for s in today_sessions)
+        today_wrong = sum(s.wrong_count for s in today_sessions)
+        today_total = today_correct + today_wrong
+        today_accuracy = round((today_correct / today_total * 100), 1) if today_total > 0 else 0
+
+        # Recent history (last 30 days)
+        from datetime import datetime, timedelta
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_sessions = PracticeSession.query\
+            .filter_by(user_id=current_user.id)\
+            .filter(PracticeSession.created_at >= thirty_days_ago)\
+            .order_by(PracticeSession.created_at.desc())\
+            .all()
+
+        # Build history for last 30 days
+        history = []
+        for s in recent_sessions[:10]:
+            history.append({
+                'title': s.title,
+                'total_items': s.total_items,
+                'correct_count': s.correct_count,
+                'wrong_count': s.wrong_count,
+                'accuracy': s.accuracy,
+                'created_at': s.created_at.isoformat()
+            })
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_sessions': total_sessions,
+                'total_correct': total_correct,
+                'total_wrong': total_wrong,
+                'avg_accuracy': avg_accuracy,
+                'today_correct': today_correct,
+                'today_wrong': today_wrong,
+                'today_accuracy': today_accuracy,
+                'history': history
+            }
+        })
+    except Exception as e:
+        print(f"Get practice stats error: {e}")
+        return jsonify({'success': False, 'message': '獲取統計失敗'}), 500
 
 
 # ==================== MAIN ====================
