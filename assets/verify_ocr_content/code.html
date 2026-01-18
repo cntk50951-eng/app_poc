@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verify OCR Content</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#22c3c3",
+                        "primary-dark": "#1aa8a8",
+                        "background-light": "#f8f7f7",
+                        "background-dark": "#1a1d23",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#252932",
+                        "text-main": "#121717",
+                        "text-sub": "#658686",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'float': '0 10px 40px -10px rgba(0, 0, 0, 0.1)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Custom scrollbar hiding for clean UI */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display antialiased selection:bg-primary/30">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden pb-32">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 px-4 py-3">
+<div class="flex items-center justify-between">
+<button class="flex size-10 items-center justify-center rounded-full active:bg-gray-200 dark:active:bg-gray-700 transition-colors text-text-main dark:text-white">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</button>
+<h1 class="text-lg font-bold leading-tight tracking-tight text-center flex-1">Verify Content</h1>
+<button class="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 active:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined">restart_alt</span>
+</button>
+</div>
+</header>
+<!-- Image Reference Area -->
+<div class="px-4 py-4">
+<div class="relative w-full overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 shadow-inner group">
+<div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+<span class="text-white text-xs font-medium">Tap to expand</span>
+</div>
+<div class="h-24 w-full bg-cover bg-center opacity-80" data-alt="Scanned textbook page showing english vocabulary list" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA4wgQm2WmEaiBnVxUhyXaNXuHR-K-nont2IMMWZKM__St6K1vhUmixGY5--LecRkIvlPoFyBvBVpSA-njqHxeSL7LWw_bRl5_BVCLSvUvivoPUYuSB8UAM0sb-Jj3Av5PxrvRtDmUibmd1-FjIgVBGxu-X4R-aq3ty0n5O1M1X3xcQX-dU8D4e3K0tg45qH26Y6VU1wd1PvVr5II3J406vfuilopEzXzIEDrlmH-RUdA_qoMnXdSLQjMcxTzC_KQ8eA1PgEjLsWAw");'>
+</div>
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full font-medium z-10">
+                    Source
+                </div>
+</div>
+</div>
+<!-- Segmented Control (Tabs) -->
+<div class="px-4 mb-4">
+<div class="flex p-1 bg-white dark:bg-surface-dark rounded-xl shadow-soft border border-gray-100 dark:border-gray-700">
+<label class="flex-1 relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="content_type" type="radio" value="words"/>
+<div class="flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 transition-all duration-300 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md">
+                        Words <span class="ml-1.5 opacity-80 text-xs bg-black/10 px-1.5 py-0.5 rounded-md">12</span>
+</div>
+</label>
+<label class="flex-1 relative cursor-pointer group">
+<input class="peer sr-only" name="content_type" type="radio" value="sentences"/>
+<div class="flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 transition-all duration-300 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md">
+                        Sentences <span class="ml-1.5 opacity-80 text-xs bg-black/10 px-1.5 py-0.5 rounded-md">4</span>
+</div>
+</label>
+</div>
+</div>
+<!-- Instructions / Context -->
+<div class="px-6 mb-2">
+<p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Detected Vocabulary</p>
+</div>
+<!-- Editable List -->
+<div class="flex flex-col gap-3 px-4">
+<!-- Item 1: High Confidence -->
+<div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border border-transparent focus-within:border-primary/50 transition-all duration-300 hover:shadow-md">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                    1
+                </div>
+<div class="flex-1 min-w-0">
+<input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="Environment"/>
+<span class="text-[10px] text-green-500 font-medium">High Confidence</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">volume_up</span>
+</button>
+<button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Item 2: High Confidence -->
+<div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border border-transparent focus-within:border-primary/50 transition-all duration-300 hover:shadow-md">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                    2
+                </div>
+<div class="flex-1 min-w-0">
+<input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="Pollution"/>
+<span class="text-[10px] text-green-500 font-medium">High Confidence</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">volume_up</span>
+</button>
+<button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Item 3: Low Confidence (Warning state) -->
+<div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border-2 border-yellow-400/30 focus-within:border-yellow-400 transition-all duration-300">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-yellow-400/10 text-yellow-600 font-bold text-lg">
+                    3
+                </div>
+<div class="flex-1 min-w-0">
+<input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0 decoration-wavy decoration-red-400 underline-offset-4" type="text" value="Recyc1ing"/>
+<div class="flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[10px] text-yellow-500 icon-filled">warning</span>
+<span class="text-[10px] text-yellow-600 font-medium">Check spelling</span>
+</div>
+</div>
+<div class="flex items-center gap-1">
+<button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">volume_up</span>
+</button>
+<button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Item 4: Chinese Character -->
+<div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border border-transparent focus-within:border-primary/50 transition-all duration-300 hover:shadow-md">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                    4
+                </div>
+<div class="flex-1 min-w-0">
+<input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="可持續發展"/>
+<span class="text-[10px] text-green-500 font-medium">High Confidence</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">volume_up</span>
+</button>
+<button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Add Button -->
+<button class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 py-3.5 text-sm font-bold text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all duration-200">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+                Add missing word
+            </button>
+</div>
+</div>
+<!-- Sticky Footer -->
+<div class="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-white via-white to-transparent dark:from-background-dark dark:via-background-dark pt-12 pb-8 px-4 pointer-events-none">
+<button class="pointer-events-auto w-full group relative flex items-center justify-center gap-3 overflow-hidden rounded-2xl bg-primary p-4 shadow-float transition-transform active:scale-[0.98]">
+<div class="absolute inset-0 bg-white/20 opacity-0 transition-opacity group-hover:opacity-100"></div>
+<div class="flex items-center justify-center rounded-full bg-white/20 p-1">
+<span class="material-symbols-outlined text-white text-[20px]">play_arrow</span>
+</div>
+<span class="text-lg font-bold text-white tracking-wide">Generate Audio &amp; Start</span>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+<span class="material-symbols-outlined text-white">chevron_right</span>
+</div>
+</button>
+</div>
+</body></html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dictation Session</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#22c3c3",
+                        "primary-dark": "#1aa1a1",
+                        "background-light": "#f8f7f7",
+                        "background-dark": "#1a1d23",
+                        "card-light": "#ffffff",
+                        "card-dark": "#272b33",
+                        "soft-green": "#8AF78A",
+                        "soft-red": "#FF7070",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem", 
+                        "lg": "1rem", 
+                        "xl": "1.5rem", 
+                        "2xl": "2rem",
+                        "3xl": "2.5rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+                        'inner-light': 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.3)',
+                        'inner-dark': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.3)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar hide */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-white transition-colors duration-200">
+<div class="relative flex h-full min-h-screen w-full flex-col max-w-md mx-auto overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl">
+<!-- Top Bar -->
+<header class="flex items-center justify-between px-6 pt-6 pb-2 z-10">
+<div class="flex flex-col">
+<span class="text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase mb-0.5">Session 1</span>
+<h2 class="text-lg font-bold leading-tight text-slate-800 dark:text-slate-100">Chapter 4 Vocab</h2>
+</div>
+<button class="flex items-center justify-center w-10 h-10 rounded-full bg-slate-200/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</header>
+<!-- Progress Bar -->
+<div class="px-6 py-2">
+<div class="flex items-center justify-between mb-2">
+<span class="text-sm font-semibold text-slate-500 dark:text-slate-400">Word 5 of 10</span>
+<span class="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">50%</span>
+</div>
+<div class="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+<div class="h-full bg-primary rounded-full transition-all duration-500 ease-out relative" style="width: 50%;">
+<div class="absolute right-0 top-0 bottom-0 w-3 bg-white/30 rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col px-6 py-4 gap-6 justify-center">
+<!-- Instruction -->
+<div class="text-center space-y-1">
+<h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Listen &amp; Write</h1>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Focus on the tones and characters.</p>
+</div>
+<!-- Audio Player Card -->
+<div class="relative bg-card-light dark:bg-card-dark rounded-3xl p-6 shadow-soft flex flex-col items-center gap-8 border border-white/50 dark:border-slate-700/50 backdrop-blur-sm">
+<!-- Background decorative blob -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
+<!-- Segmented Control -->
+<div class="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full shadow-inner">
+<label class="flex-1 cursor-pointer">
+<input checked="" class="peer sr-only" name="audio-mode" type="radio" value="word"/>
+<div class="flex items-center justify-center py-2.5 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 transition-all peer-checked:bg-white dark:peer-checked:bg-slate-600 peer-checked:text-slate-900 dark:peer-checked:text-white peer-checked:shadow-sm">
+                            Word
+                        </div>
+</label>
+<label class="flex-1 cursor-pointer">
+<input class="peer sr-only" name="audio-mode" type="radio" value="sentence"/>
+<div class="flex items-center justify-center py-2.5 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 transition-all peer-checked:bg-white dark:peer-checked:bg-slate-600 peer-checked:text-slate-900 dark:peer-checked:text-white peer-checked:shadow-sm">
+                            Sentence
+                        </div>
+</label>
+</div>
+<!-- Main Controls Cluster -->
+<div class="flex items-center justify-center gap-6 w-full relative">
+<!-- Voice Compare Button (Left) -->
+<button class="flex flex-col items-center gap-2 group">
+<div class="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center text-primary shadow-sm group-active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[24px]">mic</span>
+</div>
+<span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Compare</span>
+</button>
+<!-- Big Play Button (Center) -->
+<button class="relative group active:scale-95 transition-transform duration-150">
+<div class="absolute inset-0 bg-primary/30 rounded-full blur-md group-hover:bg-primary/50 transition-colors"></div>
+<div class="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 border-4 border-white dark:border-card-dark ring-2 ring-primary/20">
+<span class="material-symbols-outlined text-white text-[48px] ml-1">play_arrow</span>
+</div>
+</button>
+<!-- Slow Mode Button (Right) -->
+<button class="flex flex-col items-center gap-2 group">
+<div class="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-300 shadow-sm group-active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[24px]">speed</span>
+</div>
+<span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">0.5x</span>
+</button>
+</div>
+<!-- Reveal Answer Section -->
+<div class="w-full mt-2">
+<details class="group w-full">
+<summary class="list-none w-full cursor-pointer">
+<div class="w-full h-16 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group-open:hidden">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+<span class="text-sm font-semibold">Tap to reveal answer</span>
+</div>
+</summary>
+<div class="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-center animate-in fade-in slide-in-from-top-2 duration-300">
+<p class="text-3xl font-display font-bold text-slate-900 dark:text-white mb-1">蘋果</p>
+<p class="text-sm text-slate-500 font-medium">Apple (ping4 gwo2)</p>
+</div>
+</details>
+</div>
+</div>
+</main>
+<!-- Assessment Zone -->
+<footer class="px-6 pb-8 pt-2">
+<div class="flex flex-col gap-4">
+<p class="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider">Did you get it right?</p>
+<div class="grid grid-cols-2 gap-4">
+<!-- Wrong Button -->
+<button class="relative group h-20 rounded-2xl bg-soft-red/10 hover:bg-soft-red/20 active:bg-soft-red/30 border-2 border-soft-red/20 transition-all active:scale-95 flex items-center justify-center gap-3 overflow-hidden">
+<div class="w-10 h-10 rounded-full bg-soft-red text-white flex items-center justify-center shadow-md shadow-soft-red/30">
+<span class="material-symbols-outlined text-[28px]">close</span>
+</div>
+<span class="text-lg font-bold text-soft-red dark:text-[#ff8a8a]">Wrong</span>
+<!-- Decorative element -->
+<div class="absolute -bottom-4 -left-4 w-16 h-16 bg-soft-red/10 rounded-full blur-xl"></div>
+</button>
+<!-- Correct Button -->
+<button class="relative group h-20 rounded-2xl bg-soft-green/10 hover:bg-soft-green/20 active:bg-soft-green/30 border-2 border-soft-green/20 transition-all active:scale-95 flex items-center justify-center gap-3 overflow-hidden">
+<div class="w-10 h-10 rounded-full bg-soft-green text-slate-800 flex items-center justify-center shadow-md shadow-soft-green/30">
+<span class="material-symbols-outlined text-[28px]">check</span>
+</div>
+<span class="text-lg font-bold text-green-600 dark:text-[#8af78a]">Correct</span>
+<!-- Decorative element -->
+<div class="absolute -top-4 -right-4 w-16 h-16 bg-soft-green/10 rounded-full blur-xl"></div>
+</button>
+</div>
+</div>
+</footer>
+</div>
+</body></html>

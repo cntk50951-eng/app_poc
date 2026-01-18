@@ -1,27 +1,31 @@
 /**
- * Text Voice Web - Main JavaScript
- * Enhanced with dark mode, speed control, recording, wrong words book, and statistics
+ * Dictation App - Main JavaScript
+ * New UI Design Implementation with dark mode, statistics, wrong words book
  */
 
 class DictationApp {
     constructor() {
-        this.currentStep = 'upload';
+        this.currentPage = 'page-home';
         this.recognizedText = '';
         this.words = [];
         this.sentences = [];
+        this.contentType = 'words'; // 'words' or 'sentences'
         this.dictationMode = 'words';
         this.currentIndex = 0;
         this.items = [];
         this.results = [];
         this.isPlaying = false;
         this.autoPlay = false;
+        this.slowMode = false;
+        this.slowModeSpeed = 0.5;
         this.audioPlayer = document.getElementById('audio-player');
 
-        // New features
+        // Settings
         this.darkMode = false;
         this.speechRate = 0;
         this.voiceId = 'en-US-natalie';
-        this.repeatCount = 1;
+
+        // Wrong words and statistics
         this.wrongWords = [];
         this.statistics = this.loadStatistics();
 
@@ -42,7 +46,7 @@ class DictationApp {
         this.updateWrongWordsDisplay();
     }
 
-    // Settings Management
+    // ==================== SETTINGS ====================
     loadSettings() {
         const settings = JSON.parse(localStorage.getItem('dictationSettings') || '{}');
         this.darkMode = settings.darkMode || false;
@@ -51,11 +55,12 @@ class DictationApp {
         this.autoPlay = settings.autoPlay || false;
 
         // Update UI
-        document.getElementById('speed-slider').value = this.speechRate;
-        document.getElementById('voice-select').value = this.voiceId;
-        document.getElementById('auto-play-toggle').checked = this.autoPlay;
+        const speedSlider = document.getElementById('speed-slider');
+        const voiceSelect = document.getElementById('voice-select');
+        if (speedSlider) speedSlider.value = this.speechRate;
+        if (voiceSelect) voiceSelect.value = this.voiceId;
         this.updateSpeedDisplay();
-        this.updateAutoPlaySwitch();
+        this.updateAutoPlayToggle();
     }
 
     saveSettings() {
@@ -68,7 +73,39 @@ class DictationApp {
         localStorage.setItem('dictationSettings', JSON.stringify(settings));
     }
 
-    // Dark Mode
+    // ==================== PAGE NAVIGATION ====================
+    showPage(pageId) {
+        // Hide all pages
+        document.querySelectorAll('[id^="page-"]').forEach(page => {
+            page.classList.add('hidden');
+        });
+
+        // Show target page
+        const targetPage = document.getElementById(pageId);
+        if (targetPage) {
+            targetPage.classList.remove('hidden');
+            targetPage.classList.add('fade-in');
+            this.currentPage = pageId;
+        }
+
+        // Special page initializations
+        if (pageId === 'page-stats') {
+            this.updateStatsDisplay();
+        } else if (pageId === 'page-wrong-words') {
+            this.updateWrongWordsDisplay();
+        }
+    }
+
+    toggleSettings() {
+        const settingsPage = document.getElementById('page-settings');
+        if (settingsPage.classList.contains('hidden')) {
+            settingsPage.classList.remove('hidden');
+        } else {
+            settingsPage.classList.add('hidden');
+        }
+    }
+
+    // ==================== DARK MODE ====================
     toggleDarkMode() {
         this.darkMode = !this.darkMode;
         this.applyDarkMode();
@@ -76,462 +113,127 @@ class DictationApp {
     }
 
     applyDarkMode() {
-        document.body.classList.toggle('dark', this.darkMode);
-        const btn = document.getElementById('dark-mode-btn');
-        if (this.darkMode) {
-            btn.innerHTML = '<i class="fas fa-sun text-xl"></i>';
-        } else {
-            btn.innerHTML = '<i class="fas fa-moon text-xl"></i>';
+        document.documentElement.classList.toggle('dark', this.darkMode);
+        const toggle = document.getElementById('dark-mode-toggle');
+        if (toggle) {
+            const knob = toggle.querySelector('div');
+            if (this.darkMode) {
+                toggle.classList.add('bg-primary');
+                toggle.classList.remove('bg-gray-300');
+                knob.classList.add('translate-x-6');
+            } else {
+                toggle.classList.remove('bg-primary');
+                toggle.classList.add('bg-gray-300');
+                knob.classList.remove('translate-x-6');
+            }
         }
     }
 
-    // Speed Control
+    // ==================== SPEED CONTROL ====================
     setSpeechRate(rate) {
-        this.speechRate = rate;
-        document.getElementById('speed-slider').value = rate;
+        this.speechRate = parseInt(rate);
+        document.getElementById('speed-slider').value = this.speechRate;
         this.updateSpeedDisplay();
         this.saveSettings();
     }
 
     updateSpeedDisplay() {
         const value = this.speechRate;
-        const display = document.getElementById('speed-value');
-        if (value < -10) {
-            display.textContent = '很慢';
-        } else if (value < 0) {
-            display.textContent = '較慢';
-        } else if (value === 0) {
-            display.textContent = '正常';
-        } else if (value < 10) {
-            display.textContent = '較快';
-        } else {
-            display.textContent = '很快';
+        const display = document.getElementById('speed-display');
+        if (display) {
+            if (value < -10) display.textContent = '很慢';
+            else if (value < 0) display.textContent = '較慢';
+            else if (value === 0) display.textContent = '正常';
+            else if (value < 10) display.textContent = '較快';
+            else display.textContent = '很快';
         }
     }
 
-    // Voice Selection
+    // ==================== VOICE SELECTION ====================
     setVoiceId(voiceId) {
         this.voiceId = voiceId;
         this.saveSettings();
     }
 
-    // Auto Play
+    // ==================== AUTO PLAY ====================
     toggleAutoPlay() {
         this.autoPlay = !this.autoPlay;
-        this.updateAutoPlaySwitch();
+        this.updateAutoPlayToggle();
         this.saveSettings();
     }
 
-    updateAutoPlaySwitch() {
+    updateAutoPlayToggle() {
         const toggle = document.getElementById('auto-play-toggle');
-        const sw = document.getElementById('auto-play-switch');
-        if (this.autoPlay) {
-            sw.classList.add('bg-blue-500');
-            sw.querySelector('div').classList.add('translate-x-4');
-        } else {
-            sw.classList.remove('bg-blue-500');
-            sw.querySelector('div').classList.remove('translate-x-4');
-        }
-    }
-
-    // Repeat Count
-    setRepeatCount(count) {
-        this.repeatCount = count;
-        document.querySelectorAll('.repeat-btn').forEach(btn => {
-            btn.classList.remove('bg-blue-500', 'text-white');
-            btn.classList.add('bg-gray-200');
-        });
-        if (event) {
-            event.target.classList.remove('bg-gray-200');
-            event.target.classList.add('bg-blue-500', 'text-white');
-        }
-    }
-
-    // Statistics Management
-    loadStatistics() {
-        return JSON.parse(localStorage.getItem('dictationStatistics') || '{"sessions": 0, "correct": 0, "wrong": 0, "history": []}');
-    }
-
-    saveStatistics() {
-        localStorage.setItem('dictationStatistics', JSON.stringify(this.statistics));
-    }
-
-    recordSession(correct, wrong) {
-        const today = new Date().toDateString();
-        this.statistics.sessions++;
-        this.statistics.correct += correct;
-        this.statistics.wrong += wrong;
-
-        // Check if today already has stats
-        const todayEntry = this.statistics.history.find(h => h.date === today);
-        if (todayEntry) {
-            todayEntry.correct += correct;
-            todayEntry.wrong += wrong;
-        } else {
-            this.statistics.history.push({ date: today, correct, wrong });
-        }
-
-        // Keep only last 30 days
-        if (this.statistics.history.length > 30) {
-            this.statistics.history = this.statistics.history.slice(-30);
-        }
-
-        this.saveStatistics();
-        this.updateStatsDisplay();
-    }
-
-    updateStatsDisplay() {
-        const stats = this.statistics;
-
-        // Overall stats
-        document.getElementById('total-sessions').textContent = stats.sessions;
-        document.getElementById('total-correct').textContent = stats.correct;
-        document.getElementById('total-wrong').textContent = stats.wrong;
-
-        const avgAccuracy = stats.sessions > 0
-            ? Math.round((stats.correct / (stats.correct + stats.wrong)) * 100)
-            : 0;
-        document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
-
-        // Today's stats
-        const today = new Date().toDateString();
-        const todayEntry = stats.history.find(h => h.date === today) || { correct: 0, wrong: 0 };
-        document.getElementById('today-correct').textContent = todayEntry.correct;
-        document.getElementById('today-wrong').textContent = todayEntry.wrong;
-
-        const todayAccuracy = (todayEntry.correct + todayEntry.wrong) > 0
-            ? Math.round((todayEntry.correct / (todayEntry.correct + todayEntry.wrong)) * 100)
-            : 0;
-        document.getElementById('today-accuracy').textContent = todayAccuracy + '%';
-    }
-
-    // Wrong Words Management
-    loadWrongWords() {
-        this.wrongWords = JSON.parse(localStorage.getItem('wrongWords') || '[]');
-    }
-
-    saveWrongWords() {
-        localStorage.setItem('wrongWords', JSON.stringify(this.wrongWords));
-    }
-
-    addWrongWord(word, meaning, userAnswer) {
-        // Check if already exists
-        const exists = this.wrongWords.find(w => w.word.toLowerCase() === word.toLowerCase());
-        if (!exists) {
-            this.wrongWords.push({
-                word: word,
-                meaning: meaning || '',
-                userAnswer: userAnswer,
-                addedAt: new Date().toISOString(),
-                reviewCount: 0
-            });
-            this.saveWrongWords();
-            this.updateWrongWordsDisplay();
-        }
-    }
-
-    clearWrongWords() {
-        this.wrongWords = [];
-        this.saveWrongWords();
-        this.updateWrongWordsDisplay();
-    }
-
-    updateWrongWordsDisplay() {
-        const container = document.getElementById('wrong-words-list');
-        const practiceBtn = document.getElementById('practice-wrong-words');
-
-        if (this.wrongWords.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-center py-8">暫無錯詞記錄</p>';
-            practiceBtn.disabled = true;
-            return;
-        }
-
-        practiceBtn.disabled = false;
-        container.innerHTML = this.wrongWords.map((item, index) => `
-            <div class="bg-white p-3 rounded shadow flex justify-between items-center">
-                <div>
-                    <div class="font-bold text-lg">${item.word}</div>
-                    ${item.meaning ? `<div class="text-xs text-gray-500">${item.meaning}</div>` : ''}
-                    <div class="text-xs text-red-500">你寫的是: ${item.userAnswer}</div>
-                    <div class="text-xs text-gray-400">複習次數: ${item.reviewCount}</div>
-                </div>
-                <button onclick="dictationApp.removeWrongWord(${index})" class="text-red-500 hover:text-red-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `).join('');
-    }
-
-    removeWrongWord(index) {
-        this.wrongWords.splice(index, 1);
-        this.saveWrongWords();
-        this.updateWrongWordsDisplay();
-    }
-
-    // Recording functionality
-    async initRecording() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.mediaRecorder = new MediaRecorder(stream);
-            this.audioChunks = [];
-
-            this.mediaRecorder.ondataavailable = (event) => {
-                this.audioChunks.push(event.data);
-            };
-
-            this.mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
-                this.recordedAudio = URL.createObjectURL(audioBlob);
-                document.getElementById('play-record-btn').disabled = false;
-                document.getElementById('recording-status').textContent = '錄音完成，點擊播放按鈕聆聽';
-            };
-
-            return true;
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            document.getElementById('recording-status').textContent = '無法訪問麥克風，請確保已授予權限';
-            return false;
-        }
-    }
-
-    toggleRecording() {
-        if (this.isRecording) {
-            this.stopRecording();
-        } else {
-            this.startRecording();
-        }
-    }
-
-    async startRecording() {
-        const initialized = await this.initRecording();
-        if (!initialized) return;
-
-        this.isRecording = true;
-        this.audioChunks = [];
-        this.mediaRecorder.start();
-
-        const btn = document.getElementById('record-btn');
-        btn.classList.add('recording');
-        btn.innerHTML = '<i class="fas fa-stop text-xl"></i>';
-        document.getElementById('recording-status').textContent = '錄音中...點擊停止';
-    }
-
-    stopRecording() {
-        if (this.mediaRecorder && this.isRecording) {
-            this.mediaRecorder.stop();
-            this.isRecording = false;
-
-            const btn = document.getElementById('record-btn');
-            btn.classList.remove('recording');
-            btn.innerHTML = '<i class="fas fa-microphone text-xl"></i>';
-        }
-    }
-
-    playRecording() {
-        if (this.recordedAudio) {
-            const audio = new Audio(this.recordedAudio);
-            audio.play();
-        }
-    }
-
-    bindEvents() {
-        // Header buttons
-        document.getElementById('settings-btn').addEventListener('click', () => {
-            this.toggleSection('settings-panel');
-        });
-        document.getElementById('stats-btn').addEventListener('click', () => {
-            this.updateStatsDisplay();
-            this.toggleSection('step-stats');
-        });
-        document.getElementById('wrong-words-btn').addEventListener('click', () => {
-            this.updateWrongWordsDisplay();
-            this.toggleSection('step-wrong-words');
-        });
-        document.getElementById('dark-mode-btn').addEventListener('click', () => {
-            this.toggleDarkMode();
-        });
-
-        // Settings
-        document.getElementById('close-settings').addEventListener('click', () => {
-            document.getElementById('settings-panel').classList.add('hidden');
-        });
-        document.getElementById('speed-slider').addEventListener('input', (e) => {
-            this.setSpeechRate(parseInt(e.target.value));
-        });
-        document.getElementById('voice-select').addEventListener('change', (e) => {
-            this.setVoiceId(e.target.value);
-        });
-        document.getElementById('auto-play-toggle').addEventListener('click', () => {
-            this.toggleAutoPlay();
-        });
-
-        // Stats
-        document.getElementById('close-stats').addEventListener('click', () => {
-            document.getElementById('step-stats').classList.add('hidden');
-        });
-
-        // Wrong Words
-        document.getElementById('close-wrong-words').addEventListener('click', () => {
-            document.getElementById('step-wrong-words').classList.add('hidden');
-        });
-        document.getElementById('clear-wrong-words').addEventListener('click', () => {
-            if (confirm('確定要清除所有錯詞記錄嗎？')) {
-                this.clearWrongWords();
+        if (toggle) {
+            const knob = toggle.querySelector('div');
+            if (this.autoPlay) {
+                toggle.classList.add('bg-primary');
+                toggle.classList.remove('bg-gray-300');
+                knob.classList.add('translate-x-6');
+            } else {
+                toggle.classList.remove('bg-primary');
+                toggle.classList.add('bg-gray-300');
+                knob.classList.remove('translate-x-6');
             }
-        });
-        document.getElementById('practice-wrong-words').addEventListener('click', () => {
-            this.practiceWrongWords();
-        });
-
-        // Upload area
-        const uploadArea = document.getElementById('upload-area');
-        const imageInput = document.getElementById('image-input');
-
-        uploadArea.addEventListener('click', () => imageInput.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('border-blue-500');
-        });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('border-blue-500');
-        });
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('border-blue-500');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                this.handleImageFile(file);
-            }
-        });
-
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this.handleImageFile(file);
-            }
-        });
-
-        // Recognize button
-        document.getElementById('recognize-btn').addEventListener('click', () => {
-            this.performOCR();
-        });
-
-        // Start dictation buttons
-        document.getElementById('start-words-btn').addEventListener('click', () => {
-            this.startDictation('words');
-        });
-        document.getElementById('start-sentences-btn').addEventListener('click', () => {
-            this.startDictation('sentences');
-        });
-
-        // Audio controls
-        document.getElementById('play-audio-btn').addEventListener('click', () => {
-            this.togglePlay();
-        });
-        document.getElementById('prev-audio-btn').addEventListener('click', () => {
-            this.playPrev();
-        });
-        document.getElementById('next-audio-btn').addEventListener('click', () => {
-            this.playNext();
-        });
-        document.getElementById('auto-play-btn').addEventListener('click', () => {
-            this.toggleAutoPlay();
-            this.saveSettings();
-        });
-
-        // Recording
-        document.getElementById('record-btn').addEventListener('click', () => {
-            this.toggleRecording();
-        });
-        document.getElementById('play-record-btn').addEventListener('click', () => {
-            this.playRecording();
-        });
-
-        // Answer input
-        document.getElementById('answer-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.checkAnswer();
-            }
-        });
-
-        // Marking buttons
-        document.getElementById('mark-correct-btn').addEventListener('click', () => {
-            this.markAnswer(true);
-        });
-        document.getElementById('mark-incorrect-btn').addEventListener('click', () => {
-            this.markAnswer(false);
-        });
-
-        // Navigation
-        document.getElementById('back-btn').addEventListener('click', () => {
-            this.goBack();
-        });
-        document.getElementById('finish-btn').addEventListener('click', () => {
-            this.finishDictation();
-        });
-        document.getElementById('retry-btn').addEventListener('click', () => {
-            this.retry();
-        });
-        document.getElementById('home-btn').addEventListener('click', () => {
-            this.goHome();
-        });
-
-        // Save wrong words
-        document.getElementById('save-wrong-words').addEventListener('click', () => {
-            this.saveWrongWordsToBook();
-        });
-
-        // Audio player events
-        this.audioPlayer.addEventListener('ended', () => {
-            this.onAudioEnded();
-        });
+        }
     }
 
-    toggleSection(sectionId) {
-        const section = document.getElementById(sectionId);
-        if (section.classList.contains('hidden')) {
-            section.classList.remove('hidden');
+    // ==================== SLOW MODE ====================
+    toggleSlowMode() {
+        this.slowMode = !this.slowMode;
+        const slowBtn = document.getElementById('slow-btn-card');
+        const speedLabel = document.getElementById('speed-label');
+
+        if (this.slowMode) {
+            if (slowBtn) {
+                slowBtn.classList.remove('text-gray-500', 'dark:text-gray-300');
+                slowBtn.classList.add('text-primary', 'bg-primary/10');
+            }
+            if (speedLabel) speedLabel.textContent = '0.5x';
         } else {
-            section.classList.add('hidden');
+            if (slowBtn) {
+                slowBtn.classList.add('text-gray-500', 'dark:text-gray-300');
+                slowBtn.classList.remove('text-primary', 'bg-primary/10');
+            }
+            if (speedLabel) speedLabel.textContent = '1x';
         }
+    }
+
+    // ==================== CAMERA & IMAGE ====================
+    startCamera() {
+        // For mobile devices, trigger file input
+        document.getElementById('image-input').click();
     }
 
     handleImageFile(file) {
+        if (!file) return;
+
         const reader = new FileReader();
         reader.onload = (e) => {
-            const preview = document.getElementById('preview-image');
-            const placeholder = document.getElementById('upload-placeholder');
-            const recognizeBtn = document.getElementById('recognize-btn');
-
-            preview.src = e.target.result;
-            preview.classList.remove('hidden');
-            placeholder.classList.add('hidden');
-            recognizeBtn.disabled = false;
-
-            // Store base64 data
             this.imageData = e.target.result;
+
+            // Show preview
+            const preview = document.getElementById('ocr-preview');
+            if (preview) {
+                preview.style.backgroundImage = `url('${this.imageData}')`;
+            }
+
+            // Go to verify page and perform OCR
+            this.showPage('page-verify');
+            this.performOCR();
         };
         reader.readAsDataURL(file);
     }
 
+    // ==================== OCR ====================
     async performOCR() {
-        const loading = document.getElementById('ocr-loading');
-        const errorDiv = document.getElementById('ocr-error');
-        const recognizeBtn = document.getElementById('recognize-btn');
-
-        errorDiv.classList.add('hidden');
-        loading.classList.remove('hidden');
-        recognizeBtn.disabled = true;
+        if (!this.imageData) return;
 
         try {
             const response = await fetch('/api/ocr', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    image: this.imageData
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: this.imageData })
             });
 
             const data = await response.json();
@@ -541,105 +243,170 @@ class DictationApp {
                 this.words = data.extracted.words || [];
                 this.sentences = data.extracted.sentences || [];
 
-                this.displayExtractedContent();
-                this.showSection('step-content');
+                this.renderContentList();
             } else {
-                throw new Error(data.error || 'OCR failed');
+                alert('OCR 識別失敗，請重試');
             }
         } catch (error) {
-            errorDiv.textContent = `錯誤: ${error.message}`;
-            errorDiv.classList.remove('hidden');
-        } finally {
-            loading.classList.add('hidden');
-            recognizeBtn.disabled = false;
+            console.error('OCR Error:', error);
+            alert('OCR 識別失敗：' + error.message);
         }
     }
 
-    displayExtractedContent() {
-        // Display words
-        const wordsContainer = document.getElementById('words-container');
-        wordsContainer.innerHTML = this.words.map((w, i) => `
-            <div class="bg-white p-2 rounded shadow text-center text-sm">
-                <div class="font-bold">${w.word}</div>
-                ${w.meaning ? `<div class="text-xs text-gray-500">${w.meaning}</div>` : ''}
-            </div>
-        `).join('');
-
-        // Update words count
-        document.getElementById('words-count').textContent = this.words.length;
-
-        // Display sentences
-        const sentencesContainer = document.getElementById('sentences-container');
-        sentencesContainer.innerHTML = this.sentences.map(s => `
-            <div class="bg-white p-3 rounded shadow text-sm">
-                ${s.sentence}
-            </div>
-        `).join('');
-
-        // Update sentences count
-        document.getElementById('sentences-count').textContent = this.sentences.length;
-
-        // Show word/sentence counts
-        const wordsBtn = document.getElementById('start-words-btn');
-        const sentencesBtn = document.getElementById('start-sentences-btn');
-
-        if (wordsBtn) {
-            wordsBtn.innerHTML = `<i class="fas fa-headphones mr-2"></i>聽寫單詞 (${this.words.length}個)`;
-            wordsBtn.onclick = () => {
-                this.startDictation('words');
-            };
-        }
-
-        if (sentencesBtn) {
-            sentencesBtn.innerHTML = `<i class="fas fa-book-reader mr-2"></i>聽寫句子 (${this.sentences.length}個)`;
-            sentencesBtn.onclick = () => {
-                this.startDictation('sentences');
-            };
-        }
+    // ==================== CONTENT LIST ====================
+    switchContentType(type) {
+        this.contentType = type;
+        this.renderContentList();
     }
 
-    async startDictation(mode) {
-        this.dictationMode = mode;
-        this.items = mode === 'words'
-            ? this.words.map((w, i) => ({...w, type: 'word', id: i}))
-            : this.sentences.map((s, i) => ({...s, type: 'sentence', id: i}));
+    renderContentList() {
+        const container = document.getElementById('content-list');
+        const items = this.contentType === 'words' ? this.words : this.sentences;
 
-        if (this.items.length === 0) {
-            alert('沒有可用的項目！');
+        // Update counts
+        document.getElementById('words-count-badge').textContent = this.words.length;
+        document.getElementById('sentences-count-badge').textContent = this.sentences.length;
+
+        if (!container) return;
+
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">暫無內容，請上傳圖片</p>';
             return;
         }
 
-        // Reset state
+        container.innerHTML = items.map((item, index) => {
+            const text = item.word || item.sentence;
+            const num = index + 1;
+
+            return `
+                <div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-2 pr-3 rounded-xl shadow-soft border border-transparent focus-within:border-primary/50 transition-all duration-300 hover:shadow-md">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                        ${num}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="${text}" onchange="dictationApp.updateItem('${this.contentType}', ${index}, this.value)">
+                        <span class="text-[10px] text-green-500 font-medium">高準確度</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.playItemAudio('${this.contentType}', ${index})">
+                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                        </button>
+                        <button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.deleteItem('${this.contentType}', ${index})">
+                            <span class="material-symbols-outlined text-[20px]">delete</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updateItem(type, index, value) {
+        if (type === 'words') {
+            this.words[index].word = value;
+        } else {
+            this.sentences[index].sentence = value;
+        }
+    }
+
+    deleteItem(type, index) {
+        if (confirm('確定要刪除此項目嗎？')) {
+            if (type === 'words') {
+                this.words.splice(index, 1);
+            } else {
+                this.sentences.splice(index, 1);
+            }
+            this.renderContentList();
+        }
+    }
+
+    addNewItem() {
+        const newItem = this.contentType === 'words'
+            ? { word: '新詞語', meaning: '', id: Date.now() }
+            : { sentence: '新句子', id: Date.now() };
+
+        if (this.contentType === 'words') {
+            this.words.push(newItem);
+        } else {
+            this.sentences.push(newItem);
+        }
+
+        this.renderContentList();
+
+        // Scroll to bottom
+        setTimeout(() => {
+            const list = document.getElementById('content-list');
+            if (list) list.scrollTop = list.scrollHeight;
+        }, 100);
+    }
+
+    async playItemAudio(type, index) {
+        const items = type === 'words' ? this.words : this.sentences;
+        const text = items[index].word || items[index].sentence;
+
+        try {
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    voice_id: this.voiceId,
+                    rate: this.speechRate + (this.slowMode ? -30 : 0),
+                    pitch: -5
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.audio_url) {
+                this.audioPlayer.src = data.audio_url;
+                this.audioPlayer.play();
+            }
+        } catch (error) {
+            console.error('TTS Error:', error);
+        }
+    }
+
+    // ==================== GENERATE AND START ====================
+    async generateAndStart() {
+        const items = this.contentType === 'words' ? this.words : this.sentences;
+
+        if (items.length === 0) {
+            alert('沒有可用的內容！');
+            return;
+        }
+
+        // Prepare items for dictation
+        this.items = items.map((item, index) => ({
+            ...item,
+            type: this.contentType === 'words' ? 'word' : 'sentence',
+            id: index,
+            audio_url: null
+        }));
+
         this.currentIndex = 0;
+        this.dictationMode = this.contentType;
+
+        // Generate audio for all items
+        await this.generateAllAudio();
+
+        // Initialize results
         this.results = this.items.map(item => ({
             ...item,
             userAnswer: '',
-            isCorrect: null,
-            checked: false
+            isCorrect: null
         }));
 
-        // Generate TTS for all items with user's preferred speed
-        await this.generateAllAudio();
-
-        // Update UI
-        const dictationTitle = document.getElementById('dictation-title');
-        const totalCount = document.getElementById('total-count');
-
-        if (dictationTitle) dictationTitle.textContent = mode === 'words' ? '單詞聽寫' : '句子聽寫';
-        if (totalCount) totalCount.textContent = this.items.length;
-
+        // Update UI and show dictation page
         this.updateDictationUI();
-        this.showSection('step-dictation');
+        this.showPage('page-dictation');
     }
 
     async generateAllAudio() {
-        const btnId = this.dictationMode === 'words' ? 'start-words-btn' : 'start-sentences-btn';
-        const btn = document.getElementById(btnId);
-        if (!btn) return;
-
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>正在生成語音...';
-        btn.disabled = true;
+        const btn = document.querySelector('#page-verify button[onclick="dictationApp.generateAndStart()"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 生成中...';
+        }
 
         try {
             const itemsToTTS = this.items.map(item => ({
@@ -650,9 +417,7 @@ class DictationApp {
 
             const response = await fetch('/api/tts/batch', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     items: itemsToTTS,
                     voice_id: this.voiceId,
@@ -672,258 +437,422 @@ class DictationApp {
                 });
             }
         } catch (error) {
-            console.error('TTS batch error:', error);
+            console.error('TTS Error:', error);
         } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <div class="flex items-center justify-center rounded-full bg-white/20 p-1">
+                        <span class="material-symbols-outlined text-white text-[20px]">play_arrow</span>
+                    </div>
+                    <span class="text-lg font-bold text-white tracking-wide">生成音頻並開始</span>
+                    <div class="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                        <span class="material-symbols-outlined text-white">chevron_right</span>
+                    </div>
+                `;
+            }
         }
+    }
+
+    // ==================== DICTATION SESSION ====================
+    switchAudioMode(mode) {
+        // Just update the UI to show which mode is active
     }
 
     updateDictationUI() {
+        if (!this.items[this.currentIndex]) return;
+
         const item = this.items[this.currentIndex];
+        const total = this.items.length;
+        const progress = Math.round(((this.currentIndex + 1) / total) * 100);
 
-        // Update progress
-        document.getElementById('current-index').textContent = this.currentIndex + 1;
-        document.getElementById('progress-bar').style.width =
-            `${((this.currentIndex + 1) / this.items.length) * 100}%`;
+        // Update header info
+        document.getElementById('session-number').textContent = this.currentIndex + 1;
+        document.getElementById('session-title').textContent = 'Chapter 4 詞語';
+        document.getElementById('current-item-num').textContent = this.currentIndex + 1;
+        document.getElementById('total-items-num').textContent = total;
+        document.getElementById('progress-percent').textContent = progress + '%';
+        document.getElementById('dictation-progress-bar').style.width = progress + '%';
 
-        // Update item display
-        document.getElementById('item-type-badge').textContent =
-            this.dictationMode === 'words' ? '單詞' : '句子';
-        document.getElementById('current-item-text').textContent =
-            item.word || item.sentence;
+        // Update reveal section
+        const text = item.word || item.sentence;
+        document.getElementById('reveal-answer').textContent = text;
+        document.getElementById('reveal-pinyin').textContent = item.meaning || '';
 
-        const meaningEl = document.getElementById('current-item-meaning');
-        if (item.meaning) {
-            meaningEl.textContent = item.meaning;
-            meaningEl.classList.remove('hidden');
-        } else {
-            meaningEl.classList.add('hidden');
-        }
-
-        // Update answer input
-        const currentResult = this.results[this.currentIndex];
-        document.getElementById('answer-input').value = currentResult.userAnswer || '';
-        document.getElementById('answer-input').focus();
-
-        // Update play button icon
+        // Reset play button
         this.updatePlayButton(false);
-
-        // Reset recording
-        this.recordedAudio = null;
-        document.getElementById('play-record-btn').disabled = true;
-        document.getElementById('recording-status').textContent = '點擊麥克風開始錄音';
-
-        // Update audio loading state
-        const playBtn = document.getElementById('play-audio-btn');
-        const playIcon = playBtn.querySelector('i');
-
-        if (item.audio_url) {
-            this.audioPlayer.src = item.audio_url;
-            this.audioPlayer.load();
-
-            playIcon.classList.remove('fa-play', 'fa-pause', 'pl-1');
-            playIcon.classList.add('fa-spinner', 'fa-spin');
-            playBtn.disabled = true;
-            playBtn.title = '音頻加載中...';
-
-            const onCanPlay = () => {
-                playIcon.classList.remove('fa-spinner', 'fa-spin');
-                playIcon.classList.add('fa-play', 'pl-1');
-                playBtn.disabled = false;
-                playBtn.title = '播放/暫停';
-                this.audioPlayer.removeEventListener('canplay', onCanPlay);
-                this.audioPlayer.removeEventListener('error', onError);
-            };
-
-            const onError = () => {
-                playIcon.classList.remove('fa-spinner', 'fa-spin');
-                playIcon.classList.add('fa-play', 'pl-1');
-                playBtn.disabled = false;
-                playBtn.title = '播放/暫停';
-                this.audioPlayer.removeEventListener('canplay', onCanPlay);
-                this.audioPlayer.removeEventListener('error', onError);
-            };
-
-            this.audioPlayer.addEventListener('canplay', onCanPlay, { once: true });
-            this.audioPlayer.addEventListener('error', onError, { once: true });
-        } else {
-            playIcon.classList.remove('fa-play', 'fa-pause', 'pl-1');
-            playIcon.classList.add('fa-exclamation-triangle');
-            playBtn.title = '音頻尚未生成';
-        }
     }
 
-    togglePlay() {
+    playCurrentAudio() {
+        const item = this.items[this.currentIndex];
+        if (!item || !item.audio_url) {
+            console.log('No audio URL for current item');
+            return;
+        }
+
         if (this.isPlaying) {
             this.audioPlayer.pause();
             this.isPlaying = false;
             this.updatePlayButton(false);
         } else {
-            // Play multiple times based on repeat count
-            this.playWithRepeat(this.repeatCount);
-        }
-    }
+            this.audioPlayer.src = item.audio_url;
+            this.audioPlayer.playbackRate = this.slowMode ? this.slowModeSpeed : 1.0;
+            this.audioPlayer.play();
+            this.isPlaying = true;
+            this.updatePlayButton(true);
 
-    playWithRepeat(count) {
-        let played = 0;
-        const playNext = () => {
-            if (played < count) {
-                this.audioPlayer.currentTime = 0;
-                this.audioPlayer.play().then(() => {
-                    played++;
-                    this.audioPlayer.onended = playNext;
-                }).catch(e => {
-                    console.error('Play error:', e);
-                });
-            }
-        };
-        playNext();
-        this.isPlaying = true;
-        this.updatePlayButton(true);
+            this.audioPlayer.onended = () => {
+                this.isPlaying = false;
+                this.updatePlayButton(false);
+            };
+        }
     }
 
     updatePlayButton(playing) {
-        const btn = document.getElementById('play-audio-btn');
-        const icon = btn.querySelector('i');
-        if (playing) {
-            icon.classList.remove('fa-play', 'pl-1');
-            icon.classList.add('fa-pause');
-            btn.classList.add('playing');
+        const icon = document.getElementById('play-icon');
+        if (icon) {
+            if (playing) {
+                icon.textContent = 'pause';
+                icon.classList.remove('ml-1');
+            } else {
+                icon.textContent = 'play_arrow';
+                icon.classList.add('ml-1');
+            }
+        }
+    }
+
+    // ==================== RECORDING ====================
+    async toggleRecording() {
+        if (this.isRecording) {
+            this.stopRecording();
         } else {
-            icon.classList.add('fa-play', 'pl-1');
-            icon.classList.remove('fa-pause');
-            btn.classList.remove('playing');
+            await this.startRecording();
         }
     }
 
-    playPrev() {
-        if (this.currentIndex > 0) {
-            this.currentIndex--;
-            this.updateDictationUI();
+    async startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.mediaRecorder = new MediaRecorder(stream);
+            this.audioChunks = [];
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                this.audioChunks.push(event.data);
+            };
+
+            this.mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                this.recordedAudio = URL.createObjectURL(audioBlob);
+            };
+
+            this.mediaRecorder.start();
+            this.isRecording = true;
+
+            // Update UI
+            const btn = document.getElementById('record-btn-card');
+            if (btn) {
+                btn.classList.add('recording');
+                btn.classList.add('bg-red-500', 'text-white');
+                btn.classList.remove('text-primary');
+            }
+
+        } catch (error) {
+            console.error('Recording error:', error);
+            alert('無法訪問麥克風，請確保已授予權限');
         }
     }
 
-    playNext() {
-        if (this.currentIndex < this.items.length - 1) {
-            this.currentIndex++;
-            this.updateDictationUI();
+    stopRecording() {
+        if (this.mediaRecorder && this.isRecording) {
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+
+            // Update UI
+            const btn = document.getElementById('record-btn-card');
+            if (btn) {
+                btn.classList.remove('recording');
+                btn.classList.remove('bg-red-500', 'text-white');
+                btn.classList.add('text-primary');
+            }
         }
     }
 
-    onAudioEnded() {
-        this.isPlaying = false;
-        this.updatePlayButton(false);
-
-        if (this.autoPlay && this.currentIndex < this.items.length - 1) {
-            this.currentIndex++;
-            this.updateDictationUI();
-            setTimeout(() => {
-                this.togglePlay();
-            }, 500);
-        }
-    }
-
-    checkAnswer() {
-        const answer = document.getElementById('answer-input').value.trim();
-        this.results[this.currentIndex].userAnswer = answer;
-
-        const item = this.items[this.currentIndex];
-        const correctAnswer = item.word || item.sentence;
-        const isCorrect = answer.toLowerCase() === correctAnswer.toLowerCase();
-
-        this.markAnswer(isCorrect);
-    }
-
+    // ==================== MARK ANSWER ====================
     markAnswer(isCorrect) {
         const result = this.results[this.currentIndex];
         result.isCorrect = isCorrect;
-        result.checked = true;
+        result.userAnswer = result.userAnswer || '未作答';
 
-        const card = document.getElementById('current-item-card');
-        card.classList.remove('bg-green-100', 'bg-red-100');
-        card.classList.add(isCorrect ? 'bg-green-100' : 'bg-red-100');
+        // Add to wrong words if incorrect
+        if (!isCorrect) {
+            this.addWrongWord(result.word || result.sentence, result.meaning || '', result.userAnswer);
+        }
 
+        // Visual feedback
+        const main = document.querySelector('#page-dictation main');
+        if (main) {
+            main.classList.add(isCorrect ? 'bg-green-100' : 'bg-red-100', 'dark:bg-green-900/20', 'dark:bg-red-900/20');
+            setTimeout(() => {
+                main.classList.remove('bg-green-100', 'bg-red-100', 'dark:bg-green-900/20', 'dark:bg-red-900/20');
+            }, 500);
+        }
+
+        // Move to next or finish
         setTimeout(() => {
-            card.classList.remove('bg-green-100', 'bg-red-100');
-
             if (this.currentIndex < this.items.length - 1) {
                 this.currentIndex++;
                 this.updateDictationUI();
             } else {
                 this.finishDictation();
             }
-        }, 1000);
+        }, 800);
     }
 
-    goBack() {
-        this.showSection('step-content');
-    }
-
+    // ==================== RESULTS ====================
     finishDictation() {
         const correct = this.results.filter(r => r.isCorrect === true).length;
         const incorrect = this.results.filter(r => r.isCorrect === false).length;
-        const accuracy = this.results.length > 0
-            ? Math.round((correct / this.results.length) * 100)
-            : 0;
+        const total = this.results.length;
+        const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-        document.getElementById('correct-count').textContent = correct;
-        document.getElementById('incorrect-count').textContent = incorrect;
-        document.getElementById('accuracy').textContent = `${accuracy}%`;
+        // Update statistics
+        this.recordSession(correct, incorrect);
 
-        // Performance message
-        const messageEl = document.getElementById('performance-message');
-        messageEl.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-yellow-100', 'text-yellow-700', 'bg-red-100', 'text-red-700');
+        // Update headline based on accuracy
+        const headline = document.getElementById('result-headline');
         if (accuracy >= 90) {
-            messageEl.classList.add('bg-green-100', 'text-green-700');
-            messageEl.textContent = '太棒了！表現非常優秀！繼續保持！';
+            headline.textContent = '太棒了！🎉';
         } else if (accuracy >= 70) {
-            messageEl.classList.add('bg-yellow-100', 'text-yellow-700');
-            messageEl.textContent = '做得不錯！再練習一下可以更好！';
+            headline.textContent = '做得不錯！💪';
         } else {
-            messageEl.classList.add('bg-red-100', 'text-red-700');
-            messageEl.textContent = '需要加油！建議複習錯詞本再試一次！';
+            headline.textContent = '繼續加油！📚';
         }
 
-        const resultsList = document.getElementById('results-list');
-        resultsList.innerHTML = this.results.map((r, i) => {
-            const icon = r.isCorrect === true ? '✓' : (r.isCorrect === false ? '✗' : '?');
-            const iconClass = r.isCorrect === true ? 'text-green-500' : (r.isCorrect === false ? 'text-red-500' : 'text-yellow-500');
-            const answer = r.userAnswer || '(未作答)';
+        // Update accuracy ring
+        const ringLight = document.getElementById('accuracy-ring-light');
+        const ringDark = document.getElementById('accuracy-ring-dark');
+        if (ringLight) ringLight.style.background = `conic-gradient(#22c3c3 ${accuracy}%, #f1f5f9 0)`;
+        if (ringDark) ringDark.style.background = `conic-gradient(#22c3c3 ${accuracy}%, #374151 0)`;
+
+        document.getElementById('accuracy-display').innerHTML = `${accuracy}<span class="text-2xl align-top text-gray-400 ml-1">%</span>`;
+
+        // Update stats
+        document.getElementById('perfect-count').textContent = correct;
+        document.getElementById('review-count').textContent = incorrect;
+        document.getElementById('mistakes-count').textContent = `${incorrect} 題`;
+
+        // Render mistakes list
+        this.renderMistakesList();
+
+        this.showPage('page-results');
+    }
+
+    renderMistakesList() {
+        const container = document.getElementById('mistakes-list');
+        const mistakes = this.results.filter(r => r.isCorrect === false);
+
+        if (mistakes.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">全部正確！太厲害了！</p>';
+            return;
+        }
+
+        container.innerHTML = mistakes.map(m => {
+            const text = m.word || m.sentence;
+            const userAnswer = m.userAnswer || '';
 
             return `
-                <div class="quiz-item ${r.isCorrect === true ? 'correct' : (r.isCorrect === false ? 'incorrect' : 'pending')} p-4 rounded">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span class="font-bold text-lg">${i + 1}. ${r.word || r.sentence}</span>
-                            <div class="text-sm text-gray-600 mt-1">
-                                你的答案: <span class="${r.isCorrect === true ? 'text-green-600' : 'text-red-600'}">${answer}</span>
-                            </div>
+                <div class="group relative bg-white dark:bg-surface-dark rounded-xl p-4 shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-soft-red rounded-l-xl"></div>
+                    <div class="flex items-center justify-between pl-2">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">目標詞語</span>
+                            <span class="text-xl font-bold text-gray-900 dark:text-white">${text}</span>
                         </div>
-                        <span class="text-2xl ${iconClass}">${icon}</span>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <span class="text-xs font-semibold text-red-400 dark:text-red-300 block mb-0.5">你寫的是</span>
+                                <span class="text-lg font-medium text-red-500 dark:text-red-400 line-through decoration-2 decoration-red-500/40">${userAnswer}</span>
+                            </div>
+                            <button class="size-10 flex items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors" onclick="dictationApp.playMistakeAudio('${text}')">
+                                <span class="material-symbols-outlined" style="font-size: 20px;">volume_up</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
-
-        // Record statistics
-        this.recordSession(correct, incorrect);
-
-        this.showSection('step-results');
     }
 
-    saveWrongWordsToBook() {
-        const wrongResults = this.results.filter(r => r.isCorrect === false);
-        if (wrongResults.length === 0) {
-            alert('沒有錯誤的詞語需要保存！');
+    async playMistakeAudio(text) {
+        try {
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    voice_id: this.voiceId,
+                    rate: this.speechRate,
+                    pitch: -5
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && data.audio_url) {
+                const audio = new Audio(data.audio_url);
+                audio.play();
+            }
+        } catch (error) {
+            console.error('TTS Error:', error);
+        }
+    }
+
+    retryMistakes() {
+        const mistakes = this.results.filter(r => r.isCorrect === false);
+        if (mistakes.length === 0) {
+            alert('沒有錯題需要複習！');
             return;
         }
 
-        wrongResults.forEach(r => {
-            this.addWrongWord(r.word || r.sentence, r.meaning || '', r.userAnswer || '');
-        });
+        // Filter items to only include mistakes
+        this.items = mistakes.map((m, i) => ({
+            ...m,
+            id: i,
+            audio_url: null
+        }));
 
-        alert(`已保存 ${wrongResults.length} 個錯詞到錯詞本！`);
+        this.currentIndex = 0;
+        this.results = this.items.map(item => ({
+            ...item,
+            userAnswer: '',
+            isCorrect: null
+        }));
+
+        this.generateAllAudio().then(() => {
+            this.updateDictationUI();
+            this.showPage('page-dictation');
+        });
+    }
+
+    saveAndExit() {
+        this.showPage('page-home');
+    }
+
+    // ==================== STATISTICS ====================
+    loadStatistics() {
+        return JSON.parse(localStorage.getItem('dictationStatistics') || '{"sessions": 0, "correct": 0, "wrong": 0, "history": []}');
+    }
+
+    saveStatistics() {
+        localStorage.setItem('dictationStatistics', JSON.stringify(this.statistics));
+    }
+
+    recordSession(correct, wrong) {
+        const today = new Date().toDateString();
+        this.statistics.sessions++;
+        this.statistics.correct += correct;
+        this.statistics.wrong += wrong;
+
+        const todayEntry = this.statistics.history.find(h => h.date === today);
+        if (todayEntry) {
+            todayEntry.correct += correct;
+            todayEntry.wrong += wrong;
+        } else {
+            this.statistics.history.push({ date: today, correct, wrong });
+        }
+
+        if (this.statistics.history.length > 30) {
+            this.statistics.history = this.statistics.history.slice(-30);
+        }
+
+        this.saveStatistics();
+        this.updateStatsDisplay();
+    }
+
+    updateStatsDisplay() {
+        const stats = this.statistics;
+
+        document.getElementById('total-sessions').textContent = stats.sessions;
+        document.getElementById('stats-total-correct').textContent = stats.correct;
+        document.getElementById('stats-total-wrong').textContent = stats.wrong;
+
+        const avgAccuracy = stats.sessions > 0
+            ? Math.round((stats.correct / (stats.correct + stats.wrong)) * 100)
+            : 0;
+        document.getElementById('stats-avg-accuracy').textContent = avgAccuracy + '%';
+
+        // Today
+        const today = new Date().toDateString();
+        const todayEntry = stats.history.find(h => h.date === today) || { correct: 0, wrong: 0 };
+        document.getElementById('today-correct').textContent = todayEntry.correct;
+        document.getElementById('today-wrong').textContent = todayEntry.wrong;
+
+        const todayAccuracy = (todayEntry.correct + todayEntry.wrong) > 0
+            ? Math.round((todayEntry.correct / (todayEntry.correct + todayEntry.wrong)) * 100)
+            : 0;
+        document.getElementById('today-accuracy').textContent = todayAccuracy + '%';
+    }
+
+    // ==================== WRONG WORDS ====================
+    addWrongWord(word, meaning, userAnswer) {
+        const exists = this.wrongWords.find(w => w.word.toLowerCase() === word.toLowerCase());
+        if (!exists) {
+            this.wrongWords.push({
+                word: word,
+                meaning: meaning || '',
+                userAnswer: userAnswer || '',
+                addedAt: new Date().toISOString(),
+                reviewCount: 0
+            });
+            this.saveWrongWords();
+            this.updateWrongWordsDisplay();
+        }
+    }
+
+    saveWrongWords() {
+        localStorage.setItem('wrongWords', JSON.stringify(this.wrongWords));
+    }
+
+    clearWrongWords() {
+        if (confirm('確定要清除所有錯詞記錄嗎？')) {
+            this.wrongWords = [];
+            this.saveWrongWords();
+            this.updateWrongWordsDisplay();
+        }
+    }
+
+    updateWrongWordsDisplay() {
+        const container = document.getElementById('wrong-words-list-page');
+        const practiceBtn = document.getElementById('practice-wrong-btn');
+
+        if (this.wrongWords.length === 0) {
+            if (container) container.innerHTML = '<p class="text-gray-500 text-center py-8">暫無錯詞記錄</p>';
+            if (practiceBtn) practiceBtn.disabled = true;
+            return;
+        }
+
+        if (practiceBtn) practiceBtn.disabled = false;
+
+        if (container) {
+            container.innerHTML = this.wrongWords.map((item, index) => `
+                <div class="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-lg text-text-main dark:text-white">${item.word}</div>
+                        ${item.meaning ? `<div class="text-xs text-gray-500">${item.meaning}</div>` : ''}
+                        <div class="text-xs text-red-500">你寫的是: ${item.userAnswer}</div>
+                        <div class="text-xs text-gray-400">複習次數: ${item.reviewCount}</div>
+                    </div>
+                    <button onclick="dictationApp.removeWrongWord(${index})" class="text-red-500 hover:text-red-700 p-2">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
+
+    removeWrongWord(index) {
+        this.wrongWords.splice(index, 1);
+        this.saveWrongWords();
+        this.updateWrongWordsDisplay();
     }
 
     practiceWrongWords() {
@@ -933,10 +862,10 @@ class DictationApp {
             word: w.word,
             meaning: w.meaning,
             type: 'word',
-            id: i
+            id: i,
+            audio_url: null
         }));
 
-        // Increment review count
         this.wrongWords.forEach(w => w.reviewCount++);
         this.saveWrongWords();
 
@@ -944,51 +873,37 @@ class DictationApp {
         this.results = this.items.map(item => ({
             ...item,
             userAnswer: '',
-            isCorrect: null,
-            checked: false
+            isCorrect: null
         }));
 
         this.generateAllAudio().then(() => {
-            const dictationTitle = document.getElementById('dictation-title');
-            const totalCount = document.getElementById('total-count');
-
-            if (dictationTitle) dictationTitle.textContent = '錯詞複習';
-            if (totalCount) totalCount.textContent = this.items.length;
-
             this.updateDictationUI();
-            this.showSection('step-dictation');
+            this.showPage('page-dictation');
         });
     }
 
-    retry() {
-        this.startDictation(this.dictationMode);
+    // ==================== DEMO ====================
+    showResultsDemo() {
+        // Demo results for recent activity click
+        this.finishDictation();
     }
 
-    goHome() {
-        this.showSection('step-upload');
-        this.currentStep = 'upload';
-        this.recognizedText = '';
-        this.words = [];
-        this.sentences = [];
-        this.currentIndex = 0;
-        this.items = [];
-        this.results = [];
-
-        document.getElementById('preview-image').classList.add('hidden');
-        document.getElementById('upload-placeholder').classList.remove('hidden');
-        document.getElementById('recognize-btn').disabled = true;
-        document.getElementById('image-input').value = '';
-    }
-
-    showSection(sectionId) {
-        ['step-upload', 'step-content', 'step-dictation', 'step-results', 'step-stats', 'step-wrong-words', 'settings-panel'].forEach(id => {
-            document.getElementById(id).classList.add('hidden');
+    // ==================== EVENTS ====================
+    bindEvents() {
+        // Image input
+        document.getElementById('image-input').addEventListener('change', (e) => {
+            this.handleImageFile(e.target.files[0]);
         });
-        document.getElementById(sectionId).classList.remove('hidden');
+
+        // Audio player
+        this.audioPlayer.addEventListener('ended', () => {
+            this.isPlaying = false;
+            this.updatePlayButton(false);
+        });
     }
 }
 
-// Initialize app when DOM is ready
+// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     window.dictationApp = new DictationApp();
 });
