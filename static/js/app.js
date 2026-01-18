@@ -479,6 +479,63 @@ class DictationApp {
         }
     }
 
+    // ==================== GENERATE AND START (From Verify Page) ====================
+    async generateAndStart() {
+        const allItems = [];
+
+        // Get all words
+        this.allWords.forEach((word, index) => {
+            allItems.push({
+                word: word.word,
+                phonetic: word.phonetic || '',
+                meaning: word.meaning || '',
+                type: 'word',
+                id: `word_${index}`,
+                audio_url: this.ttsCache.get(word.word) || null
+            });
+        });
+
+        // Get all sentences
+        this.allSentences.forEach((sentence, index) => {
+            allItems.push({
+                sentence: sentence.sentence,
+                meaning: sentence.meaning || '',
+                type: 'sentence',
+                id: `sentence_${index}`,
+                audio_url: this.ttsCache.get(sentence.sentence) || null
+            });
+        });
+
+        if (allItems.length === 0) {
+            alert('暫無內容，請先上傳圖片');
+            return;
+        }
+
+        this.items = allItems;
+        this.currentIndex = 0;
+        this.results = this.items.map(item => ({
+            ...item,
+            userAnswer: '',
+            isCorrect: null
+        }));
+
+        // Generate audio for items not yet cached
+        const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
+        if (itemsNeedingTTS.length > 0) {
+            this.showLoading('正在生成音頻...');
+            await this.generateMissingAudio();
+            this.hideLoading();
+        }
+
+        this.updateDictationUI();
+        this.showPage('page-dictation');
+
+        // Auto-play first audio if enabled
+        if (this.autoPlay) {
+            setTimeout(() => this.playCurrentAudio(), 500);
+        }
+    }
+
     // ==================== GENERATE AND START FROM SELECTION ====================
     async startDictationFromSelection() {
         const selectedItems = [];
@@ -624,7 +681,7 @@ class DictationApp {
         const item = items[index];
         const text = item.word || item.sentence;
 
-        // Check if already cached
+        // Check if already cached - play immediately
         if (this.ttsCache.has(text)) {
             this.audioPlayer.src = this.ttsCache.get(text);
             this.audioPlayer.play();
@@ -634,9 +691,10 @@ class DictationApp {
         // Show loading animation on button
         if (buttonElement) {
             buttonElement.disabled = true;
+            buttonElement.classList.add('loading');
             const icon = buttonElement.querySelector('.material-symbols-outlined');
             if (icon) {
-                icon.textContent = 'hourglass_empty';
+                icon.textContent = 'sync';
                 icon.classList.add('animate-spin');
             }
         }
@@ -663,10 +721,12 @@ class DictationApp {
             }
         } catch (error) {
             console.error('TTS Error:', error);
+            alert('音頻生成失敗，請重試');
         } finally {
             // Restore button state
             if (buttonElement) {
                 buttonElement.disabled = false;
+                buttonElement.classList.remove('loading');
                 const icon = buttonElement.querySelector('.material-symbols-outlined');
                 if (icon) {
                     icon.textContent = 'volume_up';

@@ -69,6 +69,26 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        /* Play button loading animation */
+        .play-audio-btn.loading {
+            background-color: #22c3c3 !important;
+            color: white !important;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        .play-audio-btn.loading .material-symbols-outlined {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark min-h-screen relative pb-28 transition-colors duration-300">
