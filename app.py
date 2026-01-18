@@ -211,7 +211,13 @@ def create_extraction_prompt(text, mode):
     """Create the extraction prompt based on mode"""
     if mode == 'words':
         return f"""
-從以下英文文字中提取最重要的20個單詞（按重要性排序），返回 JSON 格式：
+從以下英文文字中提取最重要的20個有意義的單詞（按重要性排序），返回 JSON 格式：
+
+要求：
+- 只提取真正的英文單詞（2-15個字母），排除數字、符號、代碼片段等
+- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
+- 排除單獨的數字、日期、網址
+- 只返回常見的英文詞彙
 
 [
     {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
@@ -228,6 +234,12 @@ def create_extraction_prompt(text, mode):
         return f"""
 從以下英文文字中提取最重要的20個完整句子（按重要性排序），返回 JSON 格式：
 
+要求：
+- 只提取有意義的完整句子（至少5個單詞）
+- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
+- 排除片段、不完整的句子、標題、標籤等
+- 只返回可獨立成句的完整句子
+
 [
     {{"sentence": "完整句子1"}},
     {{"sentence": "完整句子2"}}
@@ -241,7 +253,13 @@ def create_extraction_prompt(text, mode):
         """.strip()
     else:
         return f"""
-從以下英文文字中提取最重要的20個單詞和20個完整句子，返回 JSON 格式：
+從以下英文文字中提取最重要的20個有意義的單詞和20個完整句子，返回 JSON 格式：
+
+要求：
+- 單詞：只提取真正的英文單詞（2-15個字母），排除數字、符號、代碼片段等
+- 句子：只提取有意義的完整句子（至少5個單詞），排除片段和不完整內容
+- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
+- 排除標題、標籤、數據結構等非自然語言內容
 
 {{
     "words": [
@@ -267,13 +285,39 @@ def fallback_extraction(text, mode):
     """Simple fallback extraction when API fails"""
     import re
 
-    # Extract words (2-15 letters)
+    # Filter patterns to exclude code-like content
+    exclude_patterns = [
+        r'^[a-zA-Z]+\[\d+\]',  # like "history[1]"
+        r'^[a-zA-Z]+\.[a-zA-Z]+',  # like "data.action"
+        r'^[a-zA-Z]+\.\w+\(\)',  # like "console.log()"
+        r'^[\d\.\-\/]+$',  # just numbers/dates
+        r'^https?://',  # URLs
+        r'^[a-zA-Z]+:\/\/',  # URLs
+    ]
+
+    def is_valid_word(w):
+        # Check if it's a common word (not code-like)
+        if len(w) < 2 or len(w) > 15:
+            return False
+        # Must contain at least one vowel
+        if not re.search(r'[aeiouAEIOU]', w):
+            return False
+        # Skip if matches exclusion patterns
+        for pattern in exclude_patterns:
+            if re.match(pattern, w):
+                return False
+        return True
+
+    # Extract words (2-15 letters with vowels)
     words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
+    words = [w for w in words if is_valid_word(w)]
     unique_words = list(dict.fromkeys(words))[:20]
 
-    # Extract sentences
+    # Extract sentences (at least 5 words, 10+ chars)
     sentences = re.split(r'[.!?]+', text)
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 10][:20]
+    sentences = [s.strip() for s in sentences if len(s.strip().split()) >= 5 and len(s.strip()) >= 10][:20]
+    # Filter out code-like sentences
+    sentences = [s for s in sentences if not re.match(r'^[\w\.\[\]]+$', s)]
 
     if mode == 'words':
         return [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words]

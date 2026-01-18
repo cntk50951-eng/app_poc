@@ -767,10 +767,9 @@ class DictationApp {
         if (this.selectedWordIndices.has(index)) {
             this.selectedWordIndices.delete(index);
         } else {
-            if (this.selectedWordIndices.size >= this.maxWordSelection) {
-                // Remove oldest selection
-                const firstIndex = this.selectedWordIndices.values().next().value;
-                this.selectedWordIndices.delete(firstIndex);
+            // For guest users, allow selection but warn on start
+            if (!this.isLoggedIn && this.selectedWordIndices.size >= 2 && this.selectedSentenceIndices.size >= 2) {
+                // Allow selection but will show error on start
             }
             this.selectedWordIndices.add(index);
         }
@@ -781,9 +780,9 @@ class DictationApp {
         if (this.selectedSentenceIndices.has(index)) {
             this.selectedSentenceIndices.delete(index);
         } else {
-            if (this.selectedSentenceIndices.size >= this.maxSentenceSelection) {
-                const firstIndex = this.selectedSentenceIndices.values().next().value;
-                this.selectedSentenceIndices.delete(firstIndex);
+            // For guest users, allow selection but warn on start
+            if (!this.isLoggedIn && this.selectedWordIndices.size >= 2 && this.selectedSentenceIndices.size >= 2) {
+                // Allow selection but will show error on start
             }
             this.selectedSentenceIndices.add(index);
         }
@@ -817,8 +816,12 @@ class DictationApp {
     async generateAndStart() {
         const allItems = [];
 
-        // Get all words
-        this.allWords.forEach((word, index) => {
+        // For guest users, limit to 2 words + 2 sentences
+        const wordLimit = this.isLoggedIn ? 20 : 2;
+        const sentenceLimit = this.isLoggedIn ? 20 : 2;
+
+        // Get words (limited)
+        this.allWords.slice(0, wordLimit).forEach((word, index) => {
             allItems.push({
                 word: word.word,
                 phonetic: word.phonetic || '',
@@ -829,8 +832,8 @@ class DictationApp {
             });
         });
 
-        // Get all sentences
-        this.allSentences.forEach((sentence, index) => {
+        // Get sentences (limited)
+        this.allSentences.slice(0, sentenceLimit).forEach((sentence, index) => {
             allItems.push({
                 sentence: sentence.sentence,
                 meaning: sentence.meaning || '',
@@ -841,7 +844,7 @@ class DictationApp {
         });
 
         if (allItems.length === 0) {
-            alert('暫無內容，請先上傳圖片');
+            this.showToast('暫無內容，請先上傳圖片', 'error');
             return;
         }
 
@@ -856,7 +859,7 @@ class DictationApp {
         // Generate audio for items not yet cached
         const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
         if (itemsNeedingTTS.length > 0) {
-            this.showLoading('正在生成音頻...');
+            this.showLoading(`正在生成 ${itemsNeedingTTS.length} 個音頻...`);
             await this.generateMissingAudio();
             this.hideLoading();
         }
@@ -900,8 +903,16 @@ class DictationApp {
         });
 
         if (selectedItems.length === 0) {
-            alert('請至少選擇一項！');
+            this.showToast('請至少選擇一項！', 'error');
             return;
+        }
+
+        // Check limits for guest users
+        if (!this.isLoggedIn) {
+            if (selectedItems.length > 4) {
+                this.showErrorBanner('未登錄用戶最多可選擇 2 個單詞和 2 個句子，請登錄以選擇更多');
+                return;
+            }
         }
 
         this.items = selectedItems;
@@ -911,7 +922,7 @@ class DictationApp {
         // Generate audio only for items not yet cached
         const itemsNeedingTTS = selectedItems.filter(item => !item.audio_url);
         if (itemsNeedingTTS.length > 0) {
-            this.showLoading('正在生成音頻...');
+            this.showLoading(`正在生成 ${itemsNeedingTTS.length} 個音頻...`);
             await this.generateMissingAudio();
             this.hideLoading();
         }
