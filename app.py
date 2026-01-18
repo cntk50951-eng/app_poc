@@ -211,11 +211,12 @@ def create_extraction_prompt(text, mode):
     """Create the extraction prompt based on mode"""
     if mode == 'words':
         return f"""
-從以下英文文字中提取最重要的2個單詞（按重要性排序），返回 JSON 格式：
+從以下英文文字中提取最重要的20個單詞（按重要性排序），返回 JSON 格式：
 
 [
     {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
     {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
+    ... 最多20個
 ]
 
 只返回 JSON，不要其他文字。
@@ -225,11 +226,12 @@ def create_extraction_prompt(text, mode):
         """.strip()
     elif mode == 'sentences':
         return f"""
-從以下英文文字中提取最重要的2個完整句子（按重要性排序），返回 JSON 格式：
+從以下英文文字中提取最重要的20個完整句子（按重要性排序），返回 JSON 格式：
 
 [
     {{"sentence": "完整句子1"}},
     {{"sentence": "完整句子2"}}
+    ... 最多20個
 ]
 
 只返回 JSON，不要其他文字。
@@ -239,16 +241,18 @@ def create_extraction_prompt(text, mode):
         """.strip()
     else:
         return f"""
-從以下英文文字中提取最重要的2個單詞和2個完整句子，返回 JSON 格式：
+從以下英文文字中提取最重要的20個單詞和20個完整句子，返回 JSON 格式：
 
 {{
     "words": [
         {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
         {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
+        ... 最多20個
     ],
     "sentences": [
         {{"sentence": "完整句子1"}},
         {{"sentence": "完整句子2"}}
+        ... 最多20個
     ]
 }}
 
@@ -265,11 +269,11 @@ def fallback_extraction(text, mode):
 
     # Extract words (2-15 letters)
     words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
-    unique_words = list(dict.fromkeys(words))[:2]
+    unique_words = list(dict.fromkeys(words))[:20]
 
     # Extract sentences
     sentences = re.split(r'[.!?]+', text)
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 10][:2]
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 10][:20]
 
     if mode == 'words':
         return [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words]

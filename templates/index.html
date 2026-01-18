@@ -155,24 +155,19 @@
             <!-- Recent Activity -->
             <div class="mb-4 flex items-center justify-between">
                 <h3 class="text-lg font-bold text-text-main dark:text-white">最近活動</h3>
-                <button onclick="dictationApp.showPage('page-history')" class="text-sm font-semibold text-primary hover:text-primary-dark">查看全部</button>
+                <button onclick="dictationApp.showHistoryPage()" class="text-sm font-semibold text-primary hover:text-primary-dark">查看全部</button>
             </div>
             <div class="flex flex-col gap-4" id="recent-activity-list">
-                <!-- Activity items will be inserted here -->
-                <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between cursor-pointer" onclick="dictationApp.showResultsDemo()">
+                <!-- Activity items will be inserted here dynamically -->
+                <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     <div class="flex items-center gap-4">
-                        <div class="relative w-14 h-14 rounded-full flex items-center justify-center bg-white dark:bg-surface-dark shadow-inner" style="background: conic-gradient(#8AF78A 92%, #edf2f7 0);">
-                            <div class="absolute inset-1 bg-white dark:bg-surface-dark rounded-full flex items-center justify-center">
-                                <span class="text-xs font-bold text-gray-800 dark:text-white">92%</span>
-                            </div>
+                        <div class="flex items-center justify-center w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-700">
+                            <span class="material-symbols-outlined text-gray-400">history</span>
                         </div>
                         <div>
-                            <h4 class="font-bold text-text-main dark:text-white text-base">P3 English Ch.4</h4>
-                            <p class="text-xs text-text-sub dark:text-gray-400 mt-0.5">今天 • 14 個詞語</p>
-                            <span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold uppercase tracking-wide">優秀</span>
+                            <p class="font-medium text-text-main dark:text-gray-300 text-sm">登錄後查看練習記錄</p>
                         </div>
                     </div>
-                    <span class="material-symbols-outlined text-gray-400">chevron_right</span>
                 </div>
             </div>
 
@@ -593,6 +588,25 @@
             <button onclick="dictationApp.showPage('page-home')" class="w-full py-3 bg-gray-200 dark:bg-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-semibold">
                 返回首頁
             </button>
+        </main>
+    </section>
+
+    <!-- ==================== HISTORY PAGE ==================== -->
+    <section id="page-history" class="hidden">
+        <header class="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-5 pt-12 pb-4 border-b border-gray-100 dark:border-gray-800">
+            <div class="flex items-center justify-between">
+                <button onclick="dictationApp.showPage('page-home')" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </button>
+                <h2 class="text-lg font-bold text-text-main dark:text-white">最近活動</h2>
+                <div class="w-10"></div>
+            </div>
+        </header>
+
+        <main class="px-5 w-full max-w-md mx-auto pt-4">
+            <div id="history-list" class="flex flex-col gap-4 pb-32">
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>
+            </div>
         </main>
     </section>
 

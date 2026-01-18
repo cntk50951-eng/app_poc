@@ -82,6 +82,7 @@ class DictationApp {
                 this.maxWordSelection = 20;
                 this.maxSentenceSelection = 20;
                 this.updateUserDisplay(data.user);
+                this.loadRecentActivity();
             }
         } catch (error) {
             console.error('Error fetching current user:', error);
@@ -281,22 +282,165 @@ class DictationApp {
         document.getElementById('image-input').click();
     }
 
-    handleImageFile(file) {
+    async handleImageFile(file) {
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            this.imageData = e.target.result;
+        // Check file size and compress if needed (OCR.space limit is 1024KB)
+        const MAX_SIZE = 1024 * 1024; // 1MB
+        let imageData = null;
 
-            const preview = document.getElementById('ocr-preview');
-            if (preview) {
-                preview.style.backgroundImage = `url('${this.imageData}')`;
+        if (file.size > MAX_SIZE) {
+            this.showLoading('正在壓縮圖片...');
+            try {
+                imageData = await this.compressImage(file, 800);
+            } catch (error) {
+                console.error('Compression error:', error);
+                // Fall back to original file reading
+                imageData = await this.fileToDataURL(file);
             }
+        } else {
+            imageData = await this.fileToDataURL(file);
+        }
 
-            this.showPage('page-verify');
-            this.performOCR();
-        };
-        reader.readAsDataURL(file);
+        this.imageData = imageData;
+
+        const preview = document.getElementById('ocr-preview');
+        if (preview) {
+            preview.style.backgroundImage = `url('${this.imageData}')`;
+        }
+
+        this.showPage('page-verify');
+        this.performOCR();
+    }
+
+    fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+        });
+    }
+
+    // ==================== HISTORY / RECENT ACTIVITY ====================
+    showHistoryPage() {
+        if (!this.isLoggedIn) {
+            this.toggleAuthModal();
+            return;
+        }
+        this.showPage('page-history');
+        this.loadHistory();
+    }
+
+    async loadHistory() {
+        const container = document.getElementById('history-list');
+        if (!container) return;
+
+        // Show loading state
+        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>';
+
+        try {
+            const response = await fetch('/api/practice/history');
+            const data = await response.json();
+
+            if (data.success && data.sessions && data.sessions.length > 0) {
+                container.innerHTML = data.sessions.map(session => this.createHistoryCard(session)).join('');
+            } else {
+                container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">暫無練習記錄</p>';
+            }
+        } catch (error) {
+            console.error('Load history error:', error);
+            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗，請重試</p>';
+        }
+    }
+
+    createHistoryCard(session) {
+        const accuracy = session.accuracy || 0;
+        const colorClass = accuracy >= 90 ? 'text-green-500' : accuracy >= 70 ? 'text-yellow-500' : 'text-red-500';
+        const bgClass = accuracy >= 90 ? 'bg-green-100 dark:bg-green-900/30' : accuracy >= 70 ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-red-100 dark:bg-red-900/30';
+        const label = accuracy >= 90 ? '優秀' : accuracy >= 70 ? '良好' : '需要加油';
+        const date = new Date(session.created_at).toLocaleDateString('zh-HK');
+
+        return `
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="relative w-12 h-12 rounded-full flex items-center justify-center ${bgClass}">
+                            <span class="text-sm font-bold ${colorClass}">${Math.round(accuracy)}%</span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-text-main dark:text-white text-base">${session.title}</h4>
+                            <p class="text-xs text-text-sub dark:text-gray-400">${date}</p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-gray-400">chevron_right</span>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex gap-4">
+                        <span class="text-gray-500 dark:text-gray-400">${session.total_items} 題</span>
+                        <span class="text-green-600 dark:text-green-400">${session.correct_count} 正確</span>
+                        <span class="text-red-500 dark:text-red-400">${session.wrong_count} 錯誤</span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full ${bgClass} ${colorClass} text-xs font-bold">${label}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    async loadRecentActivity() {
+        if (!this.isLoggedIn) return;
+
+        try {
+            const response = await fetch('/api/practice/stats');
+            const data = await response.json();
+
+            if (data.success && data.stats && data.stats.history && data.stats.history.length > 0) {
+                const container = document.getElementById('recent-activity-list');
+                if (container) {
+                    // Show only the most recent 3 activities
+                    const recentSessions = data.stats.history.slice(0, 3);
+                    container.innerHTML = recentSessions.map(session => this.createRecentActivityCard(session)).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Load recent activity error:', error);
+        }
+    }
+
+    createRecentActivityCard(session) {
+        const accuracy = session.accuracy || 0;
+        const date = new Date(session.created_at).toLocaleDateString('zh-HK');
+        const timeLabel = this.getRelativeTimeLabel(session.created_at);
+
+        return `
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between cursor-pointer" onclick="dictationApp.showHistoryPage()">
+                <div class="flex items-center gap-4">
+                    <div class="relative w-14 h-14 rounded-full flex items-center justify-center bg-white dark:bg-surface-dark shadow-inner" style="background: conic-gradient(#22c3c3 ${accuracy}%, #edf2f7 0);">
+                        <div class="absolute inset-1 bg-white dark:bg-surface-dark rounded-full flex items-center justify-center">
+                            <span class="text-xs font-bold text-gray-800 dark:text-white">${Math.round(accuracy)}%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-text-main dark:text-white text-base">${session.title}</h4>
+                        <p class="text-xs text-text-sub dark:text-gray-400 mt-0.5">${timeLabel} • ${session.total_items} 個詞語</p>
+                    </div>
+                </div>
+                <span class="material-symbols-outlined text-gray-400">chevron_right</span>
+            </div>
+        `;
+    }
+
+    getRelativeTimeLabel(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return '今天';
+        if (diffDays === 1) return '昨天';
+        if (diffDays < 7) return `${diffDays} 天前`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)} 週前`;
+        return date.toLocaleDateString('zh-HK');
     }
 
     // ==================== LOADING OVERLAY ====================
@@ -388,7 +532,92 @@ class DictationApp {
         }
     }
 
-    // ==================== CONTENT LIST ====================
+    // ==================== TOAST NOTIFICATION ====================
+    showToast(message, type = 'success') {
+        // Remove existing toast if any
+        const existingToast = document.getElementById('toast-notification');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.id = 'toast-notification';
+        toast.className = `fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[200] px-6 py-3 rounded-full shadow-lg flex items-center gap-2 animate-fade-in ${
+            type === 'success' ? 'bg-green-500 text-white' :
+            type === 'error' ? 'bg-red-500 text-white' :
+            'bg-primary text-white'
+        }`;
+
+        const icon = type === 'success' ? 'check_circle' : type === 'error' ? 'error' : 'info';
+        toast.innerHTML = `
+            <span class="material-symbols-outlined">${icon}</span>
+            <span class="font-semibold text-sm">${message}</span>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Auto remove after 2.5 seconds
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'transition-opacity');
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    }
+
+    // ==================== IMAGE COMPRESSION ====================
+    compressImage(file, maxSizeKB = 500, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Calculate max dimension based on max size
+                    const maxDimension = Math.sqrt(maxSizeKB * 1024 * 2); // Approximation
+                    if (width > maxDimension || height > maxDimension) {
+                        if (width > height) {
+                            height = Math.round(height * maxDimension / width);
+                            width = maxDimension;
+                        } else {
+                            width = Math.round(width * maxDimension / height);
+                            height = maxDimension;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob((blob) => {
+                        if (blob.size > file.size * quality) {
+                            // If compressed is not smaller, try more aggressive compression
+                            canvas.toBlob((blob2) => {
+                                resolve(blob2 ? this.blobToDataURL(blob2) : event.target.result);
+                            }, 'image/jpeg', 0.5);
+                        } else {
+                            resolve(blob ? this.blobToDataURL(blob) : event.target.result);
+                        }
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = () => reject(new Error('Failed to load image'));
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+        });
+    }
+
+    blobToDataURL(blob) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onload = () => resolve(reader.result);
+        });
+    }
     switchContentType(type) {
         this.contentType = type;
         this.renderContentList();
@@ -1565,6 +1794,9 @@ class DictationApp {
                 this.renderSelectionList();
             }
 
+            // Load recent activity from database
+            this.loadRecentActivity();
+
             // Store user info in localStorage
             localStorage.setItem('currentUser', JSON.stringify(user));
         }
@@ -1680,8 +1912,19 @@ class DictationApp {
         const file = input.files[0];
         if (!file) return;
 
-        // Show loading
-        this.showLoading('上傳頭像中...');
+        // Validate file size (max 2MB)
+        const MAX_SIZE = 2 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            this.showToast('圖片大小不能超過 2MB', 'error');
+            return;
+        }
+
+        // Show loading state on avatar button
+        const avatarBtn = document.querySelector('#profile-modal .absolute.bottom-0.right-0');
+        if (avatarBtn) {
+            avatarBtn.disabled = true;
+            avatarBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">sync</span>';
+        }
 
         try {
             const formData = new FormData();
@@ -1705,28 +1948,37 @@ class DictationApp {
                     this.updateUserDisplay(user);
                     this.showProfileModal();
                 }
-                this.hideLoading();
+                this.showToast('頭像已更新！', 'success');
             } else {
-                this.hideLoading();
-                alert(data.message || '上傳失敗');
+                this.showToast(data.message || '上傳失敗', 'error');
             }
         } catch (error) {
-            this.hideLoading();
             console.error('Avatar upload error:', error);
-            alert('上傳失敗，請重試');
+            this.showToast('上傳失敗，請重試', 'error');
+        } finally {
+            // Restore avatar button
+            if (avatarBtn) {
+                avatarBtn.disabled = false;
+                avatarBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">camera</span>';
+            }
         }
     }
 
     async saveProfile() {
         const nicknameInput = document.getElementById('profile-nickname');
         const nickname = nicknameInput ? nicknameInput.value.trim() : '';
+        const saveBtn = document.querySelector('#profile-modal button[onclick="dictationApp.saveProfile()"]');
 
         if (!nickname) {
-            alert('請輸入暱稱');
+            this.showToast('請輸入暱稱', 'error');
             return;
         }
 
-        this.showLoading('保存中...');
+        // Show loading on save button
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span> 保存中...';
+        }
 
         try {
             const response = await fetch('/auth/update-profile', {
@@ -1748,17 +2000,20 @@ class DictationApp {
                     // Update display
                     this.updateUserDisplay(user);
                 }
-                this.hideLoading();
                 this.closeProfileModal();
-                alert('資料已更新！');
+                this.showToast('資料已更新！', 'success');
             } else {
-                this.hideLoading();
-                alert(data.message || '保存失敗');
+                this.showToast(data.message || '保存失敗', 'error');
             }
         } catch (error) {
-            this.hideLoading();
             console.error('Save profile error:', error);
-            alert('保存失敗，請重試');
+            this.showToast('保存失敗，請重試', 'error');
+        } finally {
+            // Restore save button
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Save Changes';
+            }
         }
     }
 
