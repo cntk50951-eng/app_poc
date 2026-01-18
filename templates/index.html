@@ -746,6 +746,216 @@
         </div>
     </div>
 
+    <!-- Auth Modal (Login/Register) -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end justify-center sm:items-center">
+        <!-- Modal Content -->
+        <div id="auth-modal-content" class="w-full max-w-md bg-white dark:bg-surface-dark rounded-t-3xl sm:rounded-3xl shadow-2xl transform transition-transform duration-300 ease-out translate-y-full sm:translate-y-0">
+            <!-- Login View -->
+            <div id="auth-login-view" class="animate-fade-in">
+                <!-- Decorative blobs -->
+                <div class="absolute top-[-10%] right-[-10%] w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="absolute bottom-[30%] left-[-5%] w-20 h-20 bg-primary/5 rounded-full blur-xl pointer-events-none"></div>
+
+                <!-- Header -->
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 relative z-10">
+                    <button onclick="dictationApp.toggleAuthModal()" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <span class="material-symbols-outlined text-text-main dark:text-white">close</span>
+                    </button>
+                    <span class="text-sm font-bold text-gray-400">登錄 / 註冊</span>
+                    <button onclick="dictationApp.switchAuthView('register')" class="text-sm font-bold text-primary hover:text-primary-dark">註冊</button>
+                </div>
+
+                <!-- Content -->
+                <div class="px-6 py-6 relative z-10">
+                    <!-- Welcome Text -->
+                    <div class="text-center mb-6">
+                        <h1 class="text-2xl font-bold text-text-main dark:text-white tracking-tight">歡迎回來！</h1>
+                        <p class="text-sm text-text-sub dark:text-gray-400 mt-1">登錄您的帳戶以繼續</p>
+                    </div>
+
+                    <!-- Google Login Button -->
+                    <button onclick="dictationApp.loginWithGoogle()" class="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 h-12 rounded-xl border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors mb-4">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                        <span class="font-semibold text-text-main dark:text-white">使用 Google 登錄</span>
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="flex items-center gap-3 my-4">
+                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
+                        <span class="text-xs font-medium text-gray-400 uppercase">或使用郵箱</span>
+                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
+                    </div>
+
+                    <!-- Email Form -->
+                    <form onsubmit="event.preventDefault(); dictationApp.loginWithEmail();">
+                        <div class="space-y-3">
+                            <div class="group">
+                                <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 mb-1 ml-1">郵箱地址</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 group-focus-within:text-primary" style="font-size: 20px;">mail</span>
+                                    <input type="email" id="login-email" class="w-full h-12 rounded-xl bg-gray-50 dark:bg-gray-800 pl-12 pr-4 text-text-main dark:text-white border border-gray-200 dark:border-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="parent@example.com" required>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 mb-1 ml-1">密碼</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400" style="font-size: 20px;">lock</span>
+                                    <input type="password" id="login-password" class="w-full h-12 rounded-xl bg-gray-50 dark:bg-gray-800 pl-12 pr-12 text-text-main dark:text-white border border-gray-200 dark:border-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="請輸入密碼" required>
+                                    <button type="button" onclick="dictationApp.togglePasswordVisibility('login-password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                        <span class="material-symbols-outlined" style="font-size: 20px;">visibility</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Forgot Password -->
+                        <div class="flex justify-end mt-2">
+                            <button type="button" class="text-xs font-semibold text-primary hover:text-primary-dark">忘記密碼？</button>
+                        </div>
+
+                        <!-- Login Button -->
+                        <button type="submit" class="w-full h-12 mt-4 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                            <span>登錄</span>
+                            <span class="material-symbols-outlined" style="font-size: 18px;">arrow_forward</span>
+                        </button>
+                    </form>
+
+                    <!-- Register Link -->
+                    <div class="text-center mt-4">
+                        <p class="text-sm text-text-sub dark:text-gray-400">
+                            還沒有帳戶？
+                            <button onclick="dictationApp.switchAuthView('register')" class="font-bold text-primary hover:text-primary-dark">立即註冊</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Register View -->
+            <div id="auth-register-view" class="hidden animate-fade-in">
+                <!-- Decorative blobs -->
+                <div class="absolute top-[-5%] left-[-10%] w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                <!-- Header -->
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 relative z-10">
+                    <button onclick="dictationApp.switchAuthView('login')" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <span class="material-symbols-outlined text-text-main dark:text-white">arrow_back</span>
+                    </button>
+                    <span class="text-sm font-bold text-gray-400">創建帳戶</span>
+                    <div class="w-10"></div>
+                </div>
+
+                <!-- Content -->
+                <div class="px-6 py-6 relative z-10">
+                    <!-- Badge -->
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary-dark dark:text-primary text-xs font-bold uppercase tracking-wider mb-4">
+                        <span class="material-symbols-outlined" style="font-size: 14px;">school</span>
+                        家長專用
+                    </div>
+
+                    <!-- Welcome Text -->
+                    <div class="mb-4">
+                        <h1 class="text-2xl font-bold text-text-main dark:text-white tracking-tight">
+                            讓默書變得<span class="text-primary">有趣！</span>
+                        </h1>
+                        <p class="text-sm text-text-sub dark:text-gray-400 mt-1">加入數千名香港家長，用 AI 幫孩子提升默書成績</p>
+                    </div>
+
+                    <!-- Google Register Button -->
+                    <button onclick="dictationApp.loginWithGoogle()" class="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 h-12 rounded-xl border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors mb-4">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                        <span class="font-semibold text-text-main dark:text-white">使用 Google 註冊</span>
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="flex items-center gap-3 my-4">
+                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
+                        <span class="text-xs font-medium text-gray-400 uppercase">或使用郵箱</span>
+                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
+                    </div>
+
+                    <!-- Register Form -->
+                    <form onsubmit="event.preventDefault(); dictationApp.registerWithEmail();">
+                        <div class="space-y-3">
+                            <div class="group">
+                                <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 mb-1 ml-1">您的姓名</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400" style="font-size: 20px;">person</span>
+                                    <input type="text" id="register-name" class="w-full h-12 rounded-xl bg-gray-50 dark:bg-gray-800 pl-12 pr-4 text-text-main dark:text-white border border-gray-200 dark:border-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="家長姓名" required>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 mb-1 ml-1">郵箱地址</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400" style="font-size: 20px;">mail</span>
+                                    <input type="email" id="register-email" class="w-full h-12 rounded-xl bg-gray-50 dark:bg-gray-800 pl-12 pr-4 text-text-main dark:text-white border border-gray-200 dark:border-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="hello@example.com" required>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="block text-xs font-semibold text-text-sub dark:text-gray-400 mb-1 ml-1">設定密碼</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400" style="font-size: 20px;">lock</span>
+                                    <input type="password" id="register-password" class="w-full h-12 rounded-xl bg-gray-50 dark:bg-gray-800 pl-12 pr-12 text-text-main dark:text-white border border-gray-200 dark:border-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm" placeholder="至少 8 個字符" required>
+                                    <button type="button" onclick="dictationApp.togglePasswordVisibility('register-password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                        <span class="material-symbols-outlined" style="font-size: 20px;">visibility</span>
+                                    </button>
+                                </div>
+                                <p class="text-[10px] text-text-sub dark:text-gray-500 mt-1 ml-1">必須包含 1 個數字和 1 個符號</p>
+                            </div>
+                        </div>
+
+                        <!-- Terms Checkbox -->
+                        <label class="flex items-start gap-2.5 mt-4 cursor-pointer group">
+                            <div class="relative flex items-center mt-0.5">
+                                <input type="checkbox" id="terms-checkbox" class="peer size-4 cursor-pointer appearance-none rounded-md border border-gray-300 dark:border-gray-600 checked:bg-primary checked:border-primary transition-all bg-white dark:bg-gray-800" required>
+                                <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-white opacity-0 peer-checked:opacity-100 transition-opacity">
+                                    <span class="material-symbols-outlined text-[12px] font-bold">check</span>
+                                </span>
+                            </div>
+                            <span class="text-xs text-text-sub dark:text-gray-400 leading-snug">
+                                我同意 <a href="#" class="text-primary hover:underline font-semibold">服務條款</a> 和 <a href="#" class="text-primary hover:underline font-semibold">隱私政策</a>
+                            </span>
+                        </label>
+
+                        <!-- Register Button -->
+                        <button type="submit" class="w-full h-12 mt-4 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                            <span>開始使用</span>
+                            <span class="material-symbols-outlined" style="font-size: 18px;">arrow_forward</span>
+                        </button>
+                    </form>
+
+                    <!-- Login Link -->
+                    <div class="text-center mt-4">
+                        <p class="text-sm text-text-sub dark:text-gray-400">
+                            已經有帳戶？
+                            <button onclick="dictationApp.switchAuthView('login')" class="font-bold text-primary hover:text-primary-dark">立即登錄</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animation styles for auth modal -->
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    </style>
+
     <script src="/static/js/app.js"></script>
 </body>
 </html>

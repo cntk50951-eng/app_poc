@@ -8,7 +8,10 @@ import os
 import json
 import base64
 import requests
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -17,10 +20,98 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 
+# Database configuration
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    # Use PostgreSQL on Render
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Use SQLite locally
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
 # API Keys (server-side only)
 OCR_SPACE_API_KEY = os.getenv('OCR_SPACE_API_KEY')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 MURF_AI_API_KEY = os.getenv('MURF_AI_API_KEY')
+
+# Google OAuth credentials
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/auth/google/callback')
+
+
+# ==================== DATABASE MODELS ====================
+class User(UserMixin, db.Model):
+    """User model for authentication"""
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)  # Nullable for OAuth users
+    google_id = db.Column(db.String(255), unique=True, nullable=True)
+    avatar_url = db.Column(db.String(512), nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password) if self.password_hash else False
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+# ==================== HELPER FUNCTIONS ====================
+def create_database():
+    """Create database tables"""
+    with app.app_context():
+        db.create_all()
+        print("Database tables created successfully!")
+
+
+def get_google_auth_url():
+    """Generate Google OAuth URL"""
+    import urllib.parse
+    params = {
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'access_type': 'offline',
+        'prompt': 'consent'
+    }
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+
+
+def exchange_code_for_tokens(code):
+    """Exchange authorization code for access token"""
+    url = "https://oauth2.googleapis.com/token"
+    data = {
+        'code': code,
+        'client_id': GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'grant_type': 'authorization_code'
+    }
+    response = requests.post(url, json=data)
+    return response.json()
+
+
+def get_google_user_info(access_token):
+    """Get user info from Google"""
+    response = requests.get(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        headers={'Authorization': f'Bearer {access_token}'}
+    )
+    return response.json()
 
 
 def perform_ocr(image_data):
@@ -332,7 +423,179 @@ def tts_batch_api():
         return jsonify({'error': str(e)}), 500
 
 
+# ==================== AUTH ROUTES ====================
+@app.route('/auth/google')
+def google_auth():
+    """Initiate Google OAuth flow"""
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return jsonify({'success': False, 'message': 'Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env'}), 500
+    auth_url = get_google_auth_url()
+    return redirect(auth_url)
+
+
+@app.route('/auth/google/callback')
+def google_callback():
+    """Handle Google OAuth callback"""
+    try:
+        code = request.args.get('code')
+        if not code:
+            return redirect(url_for('index'))
+
+        # Exchange code for tokens
+        tokens = exchange_code_for_tokens(code)
+        if 'error' in tokens:
+            print(f"Google OAuth error: {tokens['error']}")
+            return redirect(url_for('index'))
+
+        # Get user info
+        user_info = get_google_user_info(tokens['access_token'])
+        if 'email' not in user_info:
+            print(f"Google user info: {user_info}")
+            return redirect(url_for('index'))
+
+        # Find or create user
+        user = User.query.filter_by(email=user_info['email']).first()
+
+        if not user:
+            user = User(
+                email=user_info['email'],
+                name=user_info.get('name', user_info['email'].split('@')[0]),
+                google_id=user_info['id'],
+                avatar_url=user_info.get('picture')
+            )
+            db.session.add(user)
+            db.session.commit()
+        elif not user.google_id:
+            # Update existing user with Google ID
+            user.google_id = user_info['id']
+            user.avatar_url = user_info.get('picture')
+            db.session.commit()
+
+        login_user(user)
+        return redirect(url_for('index'))
+    except Exception as e:
+        print(f"Google OAuth callback error: {e}")
+        return redirect(url_for('index'))
+
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    """Email/password login"""
+    try:
+        data = request.json
+        email = data.get('email', '').lower().strip()
+        password = data.get('password', '')
+
+        if not email or not password:
+            return jsonify({'success': False, 'message': '請填寫郵箱和密碼'}), 400
+
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            return jsonify({'success': False, 'message': '帳戶不存在，請先註冊'}), 401
+
+        if not user.check_password(password):
+            return jsonify({'success': False, 'message': '密碼錯誤'}), 401
+
+        login_user(user)
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'name': user.name,
+                'avatar_url': user.avatar_url
+            }
+        })
+    except Exception as e:
+        print(f"Login error: {e}")
+        return jsonify({'success': False, 'message': '登錄失敗，請稍後重試'}), 500
+
+
+@app.route('/auth/register', methods=['POST'])
+def register():
+    """Email/password registration"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        email = data.get('email', '').lower().strip()
+        password = data.get('password', '')
+
+        # Validation
+        if not name or not email or not password:
+            return jsonify({'success': False, 'message': '請填寫所有必填欄位'}), 400
+
+        if len(password) < 8:
+            return jsonify({'success': False, 'message': '密碼必須至少 8 個字符'}), 400
+
+        if not any(c.isdigit() for c in password):
+            return jsonify({'success': False, 'message': '密碼必須包含至少 1 個數字'}), 400
+
+        if not any(c in '!@#$%^&*(),.?":{}|<>' for c in password):
+            return jsonify({'success': False, 'message': '密碼必須包含至少 1 個符號'}), 400
+
+        # Check if user exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({'success': False, 'message': '該郵箱已被註冊'}), 400
+
+        # Create new user
+        user = User(
+            email=email,
+            name=name
+        )
+        user.set_password(password)
+
+        db.session.add(user)
+        db.session.commit()
+
+        login_user(user)
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'name': user.name,
+                'avatar_url': user.avatar_url
+            }
+        })
+    except Exception as e:
+        print(f"Register error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '註冊失敗，請稍後重試'}), 500
+
+
+@app.route('/auth/logout')
+@login_required
+def logout():
+    """Logout user"""
+    logout_user()
+    return redirect(url_for('index'))
+
+
+@app.route('/auth/current-user')
+def get_current_user():
+    """Get current logged in user"""
+    if current_user.is_authenticated:
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': current_user.id,
+                'email': current_user.email,
+                'name': current_user.name,
+                'avatar_url': current_user.avatar_url
+            }
+        })
+    return jsonify({'success': False, 'message': 'Not logged in'})
+
+
+# ==================== MAIN ====================
 if __name__ == '__main__':
+    # Create database tables
+    create_database()
+
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 

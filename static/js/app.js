@@ -1262,6 +1262,167 @@ class DictationApp {
         this.finishDictation();
     }
 
+    // ==================== AUTHENTICATION ====================
+    toggleAuthModal() {
+        const modal = document.getElementById('auth-modal');
+        const content = document.getElementById('auth-modal-content');
+
+        if (modal.classList.contains('hidden')) {
+            modal.classList.remove('hidden');
+            // Animate modal in
+            setTimeout(() => {
+                content.classList.remove('translate-y-full', 'sm:translate-y-0');
+            }, 10);
+            // Switch to login view by default
+            this.switchAuthView('login');
+        } else {
+            // Animate modal out
+            content.classList.add('translate-y-full', 'sm:translate-y-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+    }
+
+    switchAuthView(view) {
+        const loginView = document.getElementById('auth-login-view');
+        const registerView = document.getElementById('auth-register-view');
+
+        if (view === 'register') {
+            loginView.classList.add('hidden');
+            registerView.classList.remove('hidden');
+        } else {
+            registerView.classList.add('hidden');
+            loginView.classList.remove('hidden');
+        }
+    }
+
+    togglePasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        if (input.type === 'password') {
+            input.type = 'text';
+        } else {
+            input.type = 'password';
+        }
+    }
+
+    async loginWithGoogle() {
+        // Redirect to Google OAuth endpoint
+        window.location.href = '/auth/google';
+    }
+
+    async loginWithEmail() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        if (!email || !password) {
+            alert('請填寫郵箱和密碼');
+            return;
+        }
+
+        this.showLoading('正在登錄...');
+
+        try {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.hideLoading();
+                this.toggleAuthModal();
+                this.updateUserDisplay(data.user);
+                alert('登錄成功！');
+            } else {
+                this.hideLoading();
+                alert(data.message || '登錄失敗，請檢查郵箱和密碼');
+            }
+        } catch (error) {
+            this.hideLoading();
+            console.error('Login error:', error);
+            alert('登錄失敗，請稍後重試');
+        }
+    }
+
+    async registerWithEmail() {
+        const name = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const termsAccepted = document.getElementById('terms-checkbox').checked;
+
+        if (!name || !email || !password) {
+            alert('請填寫所有必填欄位');
+            return;
+        }
+
+        if (password.length < 8) {
+            alert('密碼必須至少 8 個字符');
+            return;
+        }
+
+        if (!/\d/.test(password)) {
+            alert('密碼必須包含至少 1 個數字');
+            return;
+        }
+
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+            alert('密碼必須包含至少 1 個符號');
+            return;
+        }
+
+        if (!termsAccepted) {
+            alert('請同意服務條款和隱私政策');
+            return;
+        }
+
+        this.showLoading('正在註冊...');
+
+        try {
+            const response = await fetch('/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.hideLoading();
+                this.toggleAuthModal();
+                this.updateUserDisplay(data.user);
+                alert('註冊成功！歡迎使用默書助手！');
+            } else {
+                this.hideLoading();
+                alert(data.message || '註冊失敗，請稍後重試');
+            }
+        } catch (error) {
+            this.hideLoading();
+            console.error('Register error:', error);
+            alert('註冊失敗，請稍後重試');
+        }
+    }
+
+    updateUserDisplay(user) {
+        if (user) {
+            // Update header with user info
+            const userNameEl = document.querySelector('#page-home header h2');
+            const userModeEl = document.querySelector('#page-home header p');
+
+            if (userNameEl) {
+                userNameEl.textContent = `${user.name} 👋`;
+            }
+            if (userModeEl) {
+                userModeEl.textContent = '家長模式';
+            }
+
+            // Store user info in localStorage
+            localStorage.setItem('currentUser', JSON.stringify(user));
+        }
+    }
+
     // ==================== EVENTS ====================
     bindEvents() {
         document.getElementById('image-input').addEventListener('change', (e) => {
