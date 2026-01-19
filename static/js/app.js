@@ -482,16 +482,25 @@ class DictationApp {
         this.audioPlayer.play();
     }
 
-    retrySessionAll() {
+    async retrySessionAll() {
         if (!this.currentSessionData) return;
         const wordsData = this.currentSessionData.words_data || [];
 
+        // Check if any items need audio regeneration
+        const needsAudio = wordsData.filter(item => {
+            if (item.audio_id) return false; // Has cached audio
+            if (item.audio_url && item.audio_url.startsWith('/api/audio/')) return false; // Has cached audio URL
+            return true; // Needs audio
+        });
+
+        // Build items, using cached audio URLs
         this.items = wordsData.map((item, index) => ({
             word: item.type === 'word' ? item.text : null,
             sentence: item.type === 'sentence' ? item.text : null,
             type: item.type || 'word',
             id: index,
-            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null)
+            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null),
+            text: item.text  // Store text for regeneration
         }));
 
         this.currentIndex = 0;
@@ -500,6 +509,13 @@ class DictationApp {
             userAnswer: '',
             isCorrect: null
         }));
+
+        // Regenerate audio for items that don't have valid cached audio
+        if (needsAudio.length > 0) {
+            this.showLoading('正在準備音頻...');
+            await this.regenerateMissingAudio();
+            this.hideLoading();
+        }
 
         this.updateDictationUI();
         this.showPage('page-dictation');
@@ -509,7 +525,7 @@ class DictationApp {
         }
     }
 
-    retrySessionWrong() {
+    async retrySessionWrong() {
         if (!this.currentSessionData) return;
         const wordsData = this.currentSessionData.words_data || [];
         const wrongItems = wordsData.filter(item => item.isCorrect === false || item.isCorrect === 'false');
@@ -519,12 +535,20 @@ class DictationApp {
             return;
         }
 
+        // Check if any items need audio regeneration
+        const needsAudio = wrongItems.filter(item => {
+            if (item.audio_id) return false;
+            if (item.audio_url && item.audio_url.startsWith('/api/audio/')) return false;
+            return true;
+        });
+
         this.items = wrongItems.map((item, index) => ({
             word: item.type === 'word' ? item.text : null,
             sentence: item.type === 'sentence' ? item.text : null,
             type: item.type || 'word',
             id: index,
-            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null)
+            audio_url: item.audio_url || (item.audio_id ? `/api/audio/${item.audio_id}` : null),
+            text: item.text
         }));
 
         this.currentIndex = 0;
@@ -534,11 +558,49 @@ class DictationApp {
             isCorrect: null
         }));
 
+        // Regenerate audio for items that don't have valid cached audio
+        if (needsAudio.length > 0) {
+            this.showLoading('正在準備音頻...');
+            await this.regenerateMissingAudio();
+            this.hideLoading();
+        }
+
         this.updateDictationUI();
         this.showPage('page-dictation');
 
         if (this.autoPlay) {
             setTimeout(() => this.playCurrentAudio(), 500);
+        }
+    }
+
+    async regenerateMissingAudio() {
+        const itemsNeedingAudio = this.items.filter(item => !item.audio_url);
+        if (itemsNeedingAudio.length === 0) return;
+
+        const voiceId = this.voiceId || 'en-US-natalie';
+        const rate = this.speechRate !== undefined ? this.speechRate : 0;
+        const pitch = -5; // Default pitch
+
+        for (const item of itemsNeedingAudio) {
+            try {
+                const response = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: item.text,
+                        voice_id: voiceId,
+                        rate: rate,
+                        pitch: pitch
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success && data.audio_url) {
+                    item.audio_url = data.audio_url;
+                }
+            } catch (error) {
+                console.error('Failed to regenerate audio for:', item.text, error);
+            }
         }
     }
 
