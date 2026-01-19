@@ -388,15 +388,24 @@ class DictationApp {
     }
 
     async showSessionDetail(sessionId) {
+        console.log('showSessionDetail called with sessionId:', sessionId);
         this.currentSessionId = sessionId;
         this.showPage('page-session-detail');
 
         const container = document.getElementById('session-items-list');
+        console.log('Container element:', container);
+        if (!container) {
+            console.error('session-items-list container not found!');
+            return;
+        }
         container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>';
 
         try {
+            console.log('Fetching session data from API...');
             const response = await fetch(`/api/practice/session/${sessionId}`);
+            console.log('API response status:', response.status);
             const data = await response.json();
+            console.log('API response data:', data);
 
             if (data.success && data.session) {
                 const session = data.session;
@@ -483,8 +492,15 @@ class DictationApp {
     }
 
     async retrySessionAll() {
-        if (!this.currentSessionData) return;
+        console.log('retrySessionAll called');
+        console.log('currentSessionData:', this.currentSessionData);
+        if (!this.currentSessionData) {
+            console.warn('No currentSessionData, cannot retry');
+            this.showToast('無法載入練習數據', 'error');
+            return;
+        }
         const wordsData = this.currentSessionData.words_data || [];
+        console.log('wordsData:', wordsData);
 
         // Check if any items need audio regeneration
         const needsAudio = wordsData.filter(item => {
@@ -526,9 +542,15 @@ class DictationApp {
     }
 
     async retrySessionWrong() {
-        if (!this.currentSessionData) return;
+        console.log('retrySessionWrong called');
+        if (!this.currentSessionData) {
+            console.warn('No currentSessionData, cannot retry wrong items');
+            this.showToast('無法載入練習數據', 'error');
+            return;
+        }
         const wordsData = this.currentSessionData.words_data || [];
         const wrongItems = wordsData.filter(item => item.isCorrect === false || item.isCorrect === 'false');
+        console.log('wrongItems:', wrongItems);
 
         if (wrongItems.length === 0) {
             this.showToast('沒有錯題需要練習！', 'info');
