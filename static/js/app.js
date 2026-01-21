@@ -481,7 +481,7 @@ class DictationApp {
         const date = new Date(session.created_at).toLocaleDateString('zh-HK');
 
         return `
-            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-primary/50 transition-colors" onclick="dictationApp.showSessionDetail(${session.id})">
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-primary/50 transition-colors" onclick="event.stopPropagation(); dictationApp.showSessionDetail(${session.id})">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
                         <div class="relative w-12 h-12 rounded-full flex items-center justify-center ${bgClass}">
