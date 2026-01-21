@@ -6,6 +6,8 @@
 class DictationApp {
     constructor() {
         this.currentPage = 'page-home';
+        this.previousPage = null;
+        this.pageHistory = ['page-home']; // Track page navigation history
         this.recognizedText = '';
         this.words = [];
         this.sentences = [];
@@ -50,6 +52,9 @@ class DictationApp {
         // Auth state
         this.isLoggedIn = false;
 
+        // OCR cache - persist OCR results on page refresh
+        this.ocrResultCache = this.loadOcrCache();
+
         this.init();
     }
 
@@ -58,6 +63,11 @@ class DictationApp {
         this.checkAuthStatus();
         this.bindEvents();
         this.applyDarkMode();
+
+        // Restore OCR results if available
+        if (this.ocrResultCache && this.ocrResultCache.words?.length > 0) {
+            this.restoreOcrResults();
+        }
         this.updateStatsDisplay();
         this.updateWrongWordsDisplay();
         this.loadStreak();
@@ -70,6 +80,69 @@ class DictationApp {
             // Fetch user data from server
             this.fetchCurrentUser();
         }
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', (event) => {
+            if (this.pageHistory.length > 1) {
+                this.pageHistory.pop(); // Remove current page
+                const previousPage = this.pageHistory[this.pageHistory.length - 1];
+                this.showPageWithoutHistory(previousPage);
+            }
+        });
+    }
+
+    // ==================== OCR CACHE ====================
+    saveOcrCache() {
+        const cacheData = {
+            words: this.words,
+            sentences: this.sentences,
+            allWords: this.allWords,
+            allSentences: this.allSentences,
+            imageData: this.imageData,
+            timestamp: Date.now()
+        };
+        localStorage.setItem('ocrResultCache', JSON.stringify(cacheData));
+        this.ocrResultCache = cacheData;
+    }
+
+    loadOcrCache() {
+        try {
+            const cached = localStorage.getItem('ocrResultCache');
+            if (cached) {
+                const data = JSON.parse(cached);
+                // Cache expires after 24 hours
+                if (data.timestamp && Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+                    return data;
+                }
+            }
+        } catch (e) {
+            console.error('Error loading OCR cache:', e);
+        }
+        return null;
+    }
+
+    restoreOcrResults() {
+        if (!this.ocrResultCache) return;
+
+        this.words = this.ocrResultCache.words || [];
+        this.sentences = this.ocrResultCache.sentences || [];
+        this.allWords = this.ocrResultCache.allWords || [];
+        this.allSentences = this.ocrResultCache.allSentences || [];
+        this.imageData = this.ocrResultCache.imageData || null;
+
+        // Update UI if we're on page-verify
+        if (this.currentPage === 'page-verify' && this.imageData) {
+            const preview = document.getElementById('ocr-preview');
+            if (preview) {
+                preview.style.backgroundImage = `url('${this.imageData}')`;
+            }
+            this.showSelectionPage();
+        }
+    }
+
+    clearOcrCache() {
+        localStorage.removeItem('ocrResultCache');
+        this.ocrResultCache = null;
     }
 
     // ==================== AUTH STATUS ====================
@@ -157,6 +230,14 @@ class DictationApp {
 
     // ==================== PAGE NAVIGATION ====================
     showPage(pageId) {
+        // Add current page to history before navigating
+        if (this.currentPage !== pageId && this.currentPage !== 'page-home') {
+            this.pageHistory.push(this.currentPage);
+        }
+        this.showPageWithoutHistory(pageId);
+    }
+
+    showPageWithoutHistory(pageId) {
         document.querySelectorAll('[id^="page-"]').forEach(page => {
             page.classList.add('hidden');
         });
@@ -164,6 +245,7 @@ class DictationApp {
         const targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.classList.remove('hidden');
+            this.previousPage = this.currentPage;
             this.currentPage = pageId;
         }
 
@@ -171,6 +253,21 @@ class DictationApp {
             this.updateStatsDisplay();
         } else if (pageId === 'page-wrong-words') {
             this.updateWrongWordsDisplay();
+        } else if (pageId === 'page-history') {
+            this.loadHistory();
+        } else if (pageId === 'page-session-detail' && this.currentSessionId) {
+            this.showSessionDetail(this.currentSessionId);
+        }
+    }
+
+    goBack() {
+        if (this.pageHistory.length > 1) {
+            this.pageHistory.pop(); // Remove current page
+            const previousPage = this.pageHistory[this.pageHistory.length - 1];
+            this.showPageWithoutHistory(previousPage);
+        } else {
+            // If no history, go to home
+            this.showPageWithoutHistory('page-home');
         }
     }
 
@@ -336,8 +433,8 @@ class DictationApp {
         const container = document.getElementById('history-list');
         if (!container) return;
 
-        // Show loading state
-        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>';
+        // Show loading skeleton
+        container.innerHTML = this.getHistoryLoadingSkeleton(3);
 
         try {
             const response = await fetch('/api/practice/history');
@@ -346,12 +443,34 @@ class DictationApp {
             if (data.success && data.sessions && data.sessions.length > 0) {
                 container.innerHTML = data.sessions.map(session => this.createHistoryCard(session)).join('');
             } else {
-                container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">暫無練習記錄</p>';
+                container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">history</span><p class="text-gray-500 dark:text-gray-400 text-center">暫無練習記錄</p></div>';
             }
         } catch (error) {
             console.error('Load history error:', error);
-            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗，請重試</p>';
+            container.innerHTML = `<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-red-300 dark:text-red-700 mb-4">error</span><p class="text-red-500 dark:text-red-400 text-center">載入失敗</p><button onclick="dictationApp.loadHistory()" class="mt-4 px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors">重新載入</button></div>`;
         }
+    }
+
+    getHistoryLoadingSkeleton(count = 3) {
+        return Array(count).fill(0).map(() => `
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 animate-pulse">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                        <div>
+                            <div class="w-24 h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                            <div class="w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        </div>
+                    </div>
+                    <div class="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
+            </div>
+        `).join('');
     }
 
     createHistoryCard(session) {
@@ -388,28 +507,23 @@ class DictationApp {
     }
 
     async showSessionDetail(sessionId) {
-        console.log('showSessionDetail called with sessionId:', sessionId);
         this.currentSessionId = sessionId;
         this.showPage('page-session-detail');
 
         const container = document.getElementById('session-items-list');
-        console.log('Container element:', container);
         if (!container) {
             console.error('session-items-list container not found!');
             return;
         }
-        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>';
+
+        // Show loading skeleton
+        container.innerHTML = this.getSessionDetailLoadingSkeleton();
 
         try {
-            console.log('Fetching session data from API...');
             const response = await fetch(`/api/practice/session/${sessionId}`);
-            console.log('API response status:', response.status);
             const data = await response.json();
-            console.log('API response data:', JSON.stringify(data, null, 2));
 
             if (data.success && data.session) {
-                console.log('Session data loaded successfully');
-                console.log('words_data length:', data.session.words_data?.length || 0);
                 const session = data.session;
                 const accuracy = session.accuracy || 0;
 
@@ -477,15 +591,27 @@ class DictationApp {
                         `;
                     }).join('');
                 } else {
-                    container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">暫無練習內容</p>';
+                    container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">description</span><p class="text-gray-500 dark:text-gray-400 text-center">暫無練習內容</p></div>';
                 }
             } else {
-                container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗</p>';
+                container.innerHTML = `<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-red-300 dark:text-red-700 mb-4">error</span><p class="text-red-500 dark:text-red-400 text-center">載入失敗</p><button onclick="dictationApp.showSessionDetail(${sessionId})" class="mt-4 px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors">重新載入</button></div>`;
             }
         } catch (error) {
             console.error('Load session detail error:', error);
-            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-center py-8">載入失敗，請重試</p>';
+            container.innerHTML = `<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-red-300 dark:text-red-700 mb-4">error</span><p class="text-red-500 dark:text-red-400 text-center">載入失敗</p><button onclick="dictationApp.showSessionDetail(${sessionId})" class="mt-4 px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors">重新載入</button></div>`;
         }
+    }
+
+    getSessionDetailLoadingSkeleton() {
+        return Array(5).fill(0).map((_, i) => `
+            <div class="p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 animate-pulse">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="w-24 h-5 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div class="w-12 h-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                </div>
+                <div class="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+        `).join('');
     }
 
     playSessionAudio(audioUrl) {
@@ -631,21 +757,44 @@ class DictationApp {
     async loadRecentActivity() {
         if (!this.isLoggedIn) return;
 
+        const container = document.getElementById('recent-activity-list');
+        if (!container) return;
+
+        // Show loading skeleton
+        container.innerHTML = this.getRecentActivityLoadingSkeleton();
+
         try {
             const response = await fetch('/api/practice/stats');
             const data = await response.json();
 
             if (data.success && data.stats && data.stats.history && data.stats.history.length > 0) {
-                const container = document.getElementById('recent-activity-list');
                 if (container) {
                     // Show only the most recent 3 activities
                     const recentSessions = data.stats.history.slice(0, 3);
                     container.innerHTML = recentSessions.map(session => this.createRecentActivityCard(session)).join('');
                 }
+            } else {
+                container.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400">開始第一次練習吧！</div>';
             }
         } catch (error) {
             console.error('Load recent activity error:', error);
+            container.innerHTML = '<div class="text-center py-8 text-red-500 dark:text-red-400">載入失敗</div>';
         }
+    }
+
+    getRecentActivityLoadingSkeleton() {
+        return Array(3).fill(0).map(() => `
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between animate-pulse">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                    <div>
+                        <div class="w-24 h-5 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                        <div class="w-20 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    </div>
+                </div>
+                <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            </div>
+        `).join('');
     }
 
     createRecentActivityCard(session) {
@@ -756,6 +905,9 @@ class DictationApp {
                 this.recognizedText = data.text;
                 this.allWords = data.extracted.words || [];
                 this.allSentences = data.extracted.sentences || [];
+
+                // Save OCR results to cache for page refresh
+                this.saveOcrCache();
 
                 // Update counts
                 document.getElementById('words-count-badge').textContent = this.allWords.length;

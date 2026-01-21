@@ -595,7 +595,7 @@
     <section id="page-history" class="hidden">
         <header class="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-5 pt-12 pb-4 border-b border-gray-100 dark:border-gray-800">
             <div class="flex items-center justify-between">
-                <button onclick="dictationApp.showPage('page-home')" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <button onclick="dictationApp.goBack()" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <span class="material-symbols-outlined">arrow_back</span>
                 </button>
                 <h2 class="text-lg font-bold text-text-main dark:text-white">最近活動</h2>
@@ -605,7 +605,23 @@
 
         <main class="px-5 w-full max-w-md mx-auto pt-4">
             <div id="history-list" class="flex flex-col gap-4 pb-32">
-                <p class="text-gray-500 dark:text-gray-400 text-center py-8">載入中...</p>
+                <div class="bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 animate-pulse">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                            <div>
+                                <div class="w-24 h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                                <div class="w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                            </div>
+                        </div>
+                        <div class="w-6 h-6 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div class="w-12 h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    </div>
+                </div>
             </div>
         </main>
     </section>
@@ -614,7 +630,7 @@
     <section id="page-session-detail" class="hidden">
         <header class="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-5 pt-12 pb-4 border-b border-gray-100 dark:border-gray-800">
             <div class="flex items-center justify-between">
-                <button onclick="dictationApp.showHistoryPage()" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <button onclick="dictationApp.goBack()" class="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <span class="material-symbols-outlined">arrow_back</span>
                 </button>
                 <h2 class="text-lg font-bold text-text-main dark:text-white">練習詳情</h2>
