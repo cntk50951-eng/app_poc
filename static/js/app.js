@@ -405,9 +405,11 @@ class DictationApp {
             const response = await fetch(`/api/practice/session/${sessionId}`);
             console.log('API response status:', response.status);
             const data = await response.json();
-            console.log('API response data:', data);
+            console.log('API response data:', JSON.stringify(data, null, 2));
 
             if (data.success && data.session) {
+                console.log('Session data loaded successfully');
+                console.log('words_data length:', data.session.words_data?.length || 0);
                 const session = data.session;
                 const accuracy = session.accuracy || 0;
 

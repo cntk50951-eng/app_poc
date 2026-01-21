@@ -884,7 +884,20 @@ def get_practice_session(session_id):
 
         session = PracticeSession.query.filter_by(id=session_id, user_id=current_user.id).first()
         if not session:
+            print(f"Session {session_id} not found for user {current_user.id}")
             return jsonify({'success': False, 'message': 'Session not found'}), 404
+
+        # Check if words_data exists and is valid JSON
+        words_data = []
+        if session.words_data:
+            try:
+                words_data = json.loads(session.words_data)
+                print(f"Session {session_id}: words_data loaded, {len(words_data)} items")
+            except json.JSONDecodeError as e:
+                print(f"Session {session_id}: Invalid words_data JSON: {e}")
+                words_data = []
+        else:
+            print(f"Session {session_id}: No words_data found")
 
         return jsonify({
             'success': True,
@@ -895,12 +908,14 @@ def get_practice_session(session_id):
                 'correct_count': session.correct_count,
                 'wrong_count': session.wrong_count,
                 'accuracy': session.accuracy,
-                'words_data': json.loads(session.words_data) if session.words_data else [],
+                'words_data': words_data,
                 'created_at': session.created_at.isoformat()
             }
         })
     except Exception as e:
         print(f"Get practice session error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': '獲取失敗'}), 500
 
 
