@@ -507,6 +507,16 @@ class DictationApp {
     }
 
     async showSessionDetail(sessionId) {
+        // Prevent multiple rapid calls
+        const now = Date.now();
+        const timeSinceLastCall = this.lastSessionDetailCall ? now - this.lastSessionDetailCall : 0;
+        if (this.lastSessionDetailCall && timeSinceLastCall < 500) {
+            console.log(`Skipping duplicate showSessionDetail call (${timeSinceLastCall}ms since last call)`);
+            return;
+        }
+        this.lastSessionDetailCall = now;
+
+        console.trace('showSessionDetail called from:');  // Show full stack trace
         this.currentSessionId = sessionId;
         this.showPage('page-session-detail');
 
