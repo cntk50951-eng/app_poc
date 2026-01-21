@@ -171,6 +171,8 @@ def get_google_user_info(access_token):
 
 def perform_ocr(image_data):
     """Perform OCR on the uploaded image using OCR.space"""
+    import uuid
+
     try:
         # If image_data is a base64 string, decode it
         if image_data.startswith('data:image'):
@@ -180,15 +182,39 @@ def perform_ocr(image_data):
         # Decode base64 to bytes
         image_bytes = base64.b64decode(image_data)
 
-        # OCR.space API - Support multilingual (English + Chinese Simplified)
+        # OCR.space API - Support multilingual
         url = "https://api.ocr.space/parse/image"
-        headers = {'apikey': OCR_SPACE_API_KEY}
-        files = {'file': ('image.jpg', image_bytes, 'image/jpeg')}
-        # Use 'eng' for English, 'chi_sim' for Chinese, 'auto' for auto-detection
-        data = {'language': 'eng', 'detectorientation': 'true', 'scale': 'true', 'OCREngine': '2'}
 
-        response = requests.post(url, headers=headers, files=files, data=data, timeout=30)
-        result = response.json()
+        # Create a unique filename with proper extension
+        # First try to detect image type from bytes
+        if image_bytes[:2] == b'\xff\xd8':
+            ext = 'jpg'
+        elif image_bytes[:4] == b'\x89PNG':
+            ext = 'png'
+        elif image_bytes[:4] == b'GIF':
+            ext = 'gif'
+        else:
+            ext = 'jpg'  # default
+
+        filename = f"image.{ext}"
+        files = {'file': (filename, image_bytes, f'image/{ext}')}
+        data = {
+            'language': 'eng',
+            'detectOrientation': 'true',
+            'scale': 'true',
+            'OCREngine': '2'
+        }
+
+        response = requests.post(url, files=files, data=data, timeout=30)
+
+        # Check for HTTP errors
+        if response.status_code != 200:
+            raise Exception(f"OCR API returned status {response.status_code}")
+
+        try:
+            result = response.json()
+        except Exception as e:
+            raise Exception(f"OCR API returned non-JSON response: {response.text[:200]}")
 
         # Check for errors
         if result.get('IsErroredOnProcessing'):
