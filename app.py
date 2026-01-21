@@ -586,6 +586,7 @@ def is_valid_extraction_result(extracted):
     return True
 
 
+@app.route('/api/ocr', methods=['POST'])
 def ocr_api():
     """OCR endpoint - handles both OCR and content extraction"""
     try:
