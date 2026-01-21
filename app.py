@@ -238,7 +238,13 @@ def extract_content_with_deepseek(text, mode='both'):
 
     except Exception as e:
         print(f"DeepSeek API Error: {e}")
-        return fallback_extraction(text, mode)
+        # For exceptions, extract candidates first then use enhanced extraction
+        import re
+        words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
+        words = list(dict.fromkeys(words))[:20]
+        sentences = re.split(r'[.!?\n]+', text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) >= 10][:20]
+        return enhanced_extraction_for_technical(text, mode)
 
 
 def create_extraction_prompt(text, mode):
@@ -315,8 +321,12 @@ def create_extraction_prompt(text, mode):
         """.strip()
 
 
-def fallback_extraction(text, mode):
-    """Simple fallback extraction when API fails"""
+def enhanced_extraction_for_technical(text, mode):
+    """
+    Enhanced extraction for technical content:
+    1. Use regex to extract candidate words/sentences
+    2. Call DeepSeek to filter and add meanings/phonetics
+    """
     import re
 
     # Filter patterns to exclude code-like content
@@ -332,37 +342,100 @@ def fallback_extraction(text, mode):
     ]
 
     def is_valid_word(w):
-        # Check if it's a common word (not code-like)
         if len(w) < 2 or len(w) > 15:
             return False
-        # Must contain at least one vowel
         if not re.search(r'[aeiouAEIOU]', w):
             return False
-        # Skip if matches exclusion patterns
         for pattern in exclude_patterns:
             if re.match(pattern, w):
                 return False
         return True
 
-    # Extract words (2-15 letters with vowels)
+    # Step 1: Extract candidate words
     words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
     words = [w for w in words if is_valid_word(w)]
     unique_words = list(dict.fromkeys(words))[:20]
 
-    # Extract sentences - be more lenient for technical content
+    # Step 2: Extract candidate sentences
     sentences = re.split(r'[.!?\n]+', text)
     sentences = [s.strip() for s in sentences if len(s.strip()) >= 10][:20]
-    # Filter out lines that are just codes/numbers
     sentences = [s for s in sentences if not re.match(r'^[\d\.\[\]\/\-\s]+$', s)]
 
+    # Step 3: Call DeepSeek to filter and add meanings
+    try:
+        client = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{
+                    "role": "user",
+                    "content": create_enhanced_prompt(unique_words, sentences, mode)
+                }],
+                "temperature": 0.3,
+                "max_tokens": 2000
+            }
+        )
+
+        result = client.json()
+        content = result['choices'][0]['message']['content']
+        content = content.replace('```json', '').replace('```', '').strip()
+        return json.loads(content)
+
+    except Exception as e:
+        print(f"Enhanced extraction DeepSeek error: {e}")
+        # Fallback to basic extraction if API fails
+        return basic_extraction(unique_words, sentences, mode)
+
+
+def create_enhanced_prompt(words, sentences, mode):
+    """Create prompt for enhanced extraction with DeepSeek"""
+    words_str = ', '.join(words) if words else ""
+    sentences_str = '\n'.join([f"- {s}" for s in sentences[:10]]) if sentences else ""
+
+    return f"""
+從以下候選單詞和句子中，過濾出有意義的內容，並為每個單詞添加音標和中文翻譯，為每個句子添加中文翻譯。
+
+候選單詞（去除數字、代碼、數據結構等）：
+{words_str}
+
+候選句子（去除不完整、片段化的內容）：
+{sentences_str}
+
+要求：
+- 單詞：只保留真正的英文詞彙（常見單詞），排除技術術語、變量名、數據庫字段名等
+- 句子：只保留完整、有意義的自然語言句子
+- 為每個單詞提供：word, phonetic (/IPA/), meaning（中文翻譯）, example（例句）
+- 為每個句子提供：sentence, meaning（中文翻譯）
+
+返回 JSON 格式：
+{{
+    "words": [
+        {{"word": "example", "phonetic": "/ɪɡˈzæmpl/", "meaning": "例子，示例", "example": "This is an example sentence."}},
+        ...
+    ],
+    "sentences": [
+        {{"sentence": "This is a complete sentence.", "meaning": "這是一個完整的句子。"}},
+        ...
+    ]
+}}
+
+只返回 JSON，不要其他文字。"""
+
+
+def basic_extraction(words, sentences, mode):
+    """Basic extraction without DeepSeek (last resort fallback)"""
     if mode == 'words':
-        return [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words]
+        return [{"word": w, "phonetic": "", "meaning": "[待翻譯]"} for w in words[:20]]
     elif mode == 'sentences':
-        return [{"sentence": s} for s in sentences]
+        return [{"sentence": s, "meaning": "[待翻譯]"} for s in sentences[:20]]
     else:
         return {
-            "words": [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words],
-            "sentences": [{"sentence": s} for s in sentences]
+            "words": [{"word": w, "phonetic": "", "meaning": "[待翻譯]"} for w in words[:20]],
+            "sentences": [{"sentence": s, "meaning": "[待翻譯]"} for s in sentences[:20]]
         }
 
 
@@ -458,9 +531,37 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/api/ocr', methods=['POST'])
+def is_valid_extraction_result(extracted):
+    """Check if the extraction result is valid (not database queries or technical content)"""
+    if not extracted:
+        return False
+
+    # Check if it's a list of dicts with expected keys
+    if isinstance(extracted, list):
+        for item in extracted:
+            if not isinstance(item, dict):
+                return False
+            if 'word' in item and not item.get('meaning'):
+                return False  # Missing meaning for word
+            if 'sentence' in item and not item.get('meaning'):
+                return False  # Missing translation for sentence
+
+    # Check if it's a dict with words/sentences
+    if isinstance(extracted, dict):
+        if 'words' in extracted:
+            for word in extracted['words']:
+                if not word.get('meaning'):
+                    return False
+        if 'sentences' in extracted:
+            for sent in extracted['sentences']:
+                if not sent.get('meaning'):
+                    return False
+
+    return True
+
+
 def ocr_api():
-    """OCR endpoint"""
+    """OCR endpoint - handles both OCR and content extraction"""
     try:
         data = request.json
         image_data = data.get('image', '')
@@ -470,14 +571,31 @@ def ocr_api():
 
         text = perform_ocr(image_data)
 
-        # Extract content using DeepSeek
-        extracted = extract_content_with_deepseek(text, mode='both')
+        # Check if text looks like database query or technical content
+        technical_patterns = [
+            r'^[\w\s]*SELECT.*FROM',
+            r'^[\w\s]*INSERT.*INTO',
+            r'^[\w\s]*UPDATE.*SET',
+            r'^[\w\s]*DELETE.*FROM',
+            r'^[\w\s]*history\[\d+\]',
+            r'^[\w\s]*data\[\d+\]',
+            r'^[\w\s]*[\w]+\.[\w]+\([\w\s,]*\)',  # function calls
+        ]
 
-        # Fallback if DeepSeek returned empty results
-        if (not extracted.get('words') and not extracted.get('sentences')) or \
-           (len(extracted.get('words', [])) == 0 and len(extracted.get('sentences', [])) == 0):
-            print("DeepSeek returned empty, using fallback extraction")
-            extracted = fallback_extraction(text, 'both')
+        is_technical = any(re.search(p, text, re.IGNORECASE | re.DOTALL) for p in technical_patterns)
+
+        if is_technical:
+            print("Detected technical content, using enhanced extraction")
+            # Use enhanced extraction for technical content
+            extracted = enhanced_extraction_for_technical(text, 'both')
+        else:
+            # Extract content using DeepSeek for normal content
+            extracted = extract_content_with_deepseek(text, mode='both')
+
+            # Fallback if DeepSeek returned empty or invalid results
+            if not is_valid_extraction_result(extracted):
+                print("DeepSeek returned invalid results, using enhanced extraction")
+                extracted = enhanced_extraction_for_technical(text, 'both')
 
         return jsonify({
             'success': True,
