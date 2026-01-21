@@ -95,6 +95,30 @@ class AudioFile(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 
+class WrongWord(db.Model):
+    """User's wrong words book - words/sentences they want to review"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    text = db.Column(db.String(500), nullable=False)  # The word or sentence
+    type = db.Column(db.String(20), nullable=False)  # 'word' or 'sentence'
+    phonetic = db.Column(db.String(100), nullable=True)  # Phonetic symbols for words
+    meaning = db.Column(db.Text, nullable=True)  # Chinese translation
+    example = db.Column(db.Text, nullable=True)  # Example sentence for words
+    audio_id = db.Column(db.Integer, db.ForeignKey('audio_file.id'), nullable=True)  # Reference to cached audio
+    source_session_id = db.Column(db.Integer, nullable=True)  # Original practice session ID
+    notes = db.Column(db.Text, nullable=True)  # User's personal notes
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    # Relationship to audio file
+    audio_file = db.relationship('AudioFile', backref='wrong_words')
+
+    # Composite unique constraint to prevent duplicates
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'text', 'type', name='unique_user_word'),
+    )
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -230,8 +254,8 @@ def create_extraction_prompt(text, mode):
 - 只返回常見的英文詞彙
 
 [
-    {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
-    {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
+    {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}},
+    {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}}
     ... 最多20個
 ]
 
@@ -251,8 +275,8 @@ def create_extraction_prompt(text, mode):
 - 只返回可獨立成句的完整句子
 
 [
-    {{"sentence": "完整句子1"}},
-    {{"sentence": "完整句子2"}}
+    {{"sentence": "完整句子1", "meaning": "中文翻譯"}},
+    {{"sentence": "完整句子2", "meaning": "中文翻譯"}}
     ... 最多20個
 ]
 
@@ -273,13 +297,13 @@ def create_extraction_prompt(text, mode):
 
 {{
     "words": [
-        {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文意思"}},
-        {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文意思"}}
+        {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}},
+        {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}}
         ... 最多20個
     ],
     "sentences": [
-        {{"sentence": "完整句子1"}},
-        {{"sentence": "完整句子2"}}
+        {{"sentence": "完整句子1", "meaning": "中文翻譯"}},
+        {{"sentence": "完整句子2", "meaning": "中文翻譯"}}
         ... 最多20個
     ]
 }}
@@ -1034,6 +1058,189 @@ def calculate_streak(sessions):
         current_date -= timedelta(days=1)
 
     return streak
+
+
+# ==================== WRONG WORDS BOOK ====================
+@app.route('/api/wrong-words', methods=['GET'])
+def get_wrong_words():
+    """Get all wrong words for current user, grouped by date"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': '請先登錄'}), 401
+
+        # Get search query
+        search_query = request.args.get('q', '').strip().lower()
+
+        # Base query
+        query = WrongWord.query.filter_by(user_id=current_user.id)
+
+        # Apply search if provided
+        if search_query:
+            # Search in text, meaning, or by date
+            if '/' in search_query or '-' in search_query:
+                # Try to search by date
+                try:
+                    from datetime import datetime
+                    search_date = datetime.strptime(search_query, '%Y/%m/%d').date() if '/' in search_query else datetime.strptime(search_query, '%Y-%m-%d').date()
+                    query = query.filter(db.func.date(WrongWord.created_at) == search_date)
+                except ValueError:
+                    # Not a valid date format, search by text instead
+                    query = query.filter(
+                        db.or_(
+                            WrongWord.text.ilike(f'%{search_query}%'),
+                            WrongWord.meaning.ilike(f'%{search_query}%')
+                        )
+                    )
+            else:
+                # Search by text or meaning
+                query = query.filter(
+                    db.or_(
+                        WrongWord.text.ilike(f'%{search_query}%'),
+                        WrongWord.meaning.ilike(f'%{search_query}%')
+                    )
+                )
+
+        # Order by created_at descending
+        wrong_words = query.order_by(WrongWord.created_at.desc()).all()
+
+        # Group by date
+        from datetime import date
+        grouped = {}
+        for ww in wrong_words:
+            created_date = ww.created_at.date() if hasattr(ww.created_at, 'date') else ww.created_at
+            date_key = created_date.strftime('%Y/%m/%d')
+            if date_key not in grouped:
+                grouped[date_key] = []
+            grouped[date_key].append({
+                'id': ww.id,
+                'text': ww.text,
+                'type': ww.type,
+                'phonetic': ww.phonetic,
+                'meaning': ww.meaning,
+                'example': ww.example,
+                'audio_url': f'/api/audio/{ww.audio_id}' if ww.audio_id else None,
+                'notes': ww.notes,
+                'created_at': ww.created_at.isoformat()
+            })
+
+        return jsonify({
+            'success': True,
+            'wrong_words': grouped,
+            'total_count': len(wrong_words)
+        })
+    except Exception as e:
+        print(f"Get wrong words error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': '獲取生詞本失敗'}), 500
+
+
+@app.route('/api/wrong-words', methods=['POST'])
+def add_wrong_word():
+    """Add a new word to wrong words book"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': '請先登錄'}), 401
+
+        data = request.json
+        text = data.get('text', '').strip()
+        word_type = data.get('type', 'word')
+        phonetic = data.get('phonetic', '')
+        meaning = data.get('meaning', '')
+        example = data.get('example', '')
+        audio_id = data.get('audio_id')
+        source_session_id = data.get('source_session_id')
+        notes = data.get('notes', '')
+
+        if not text:
+            return jsonify({'success': False, 'message': '詞語不能為空'}), 400
+
+        # Check for duplicate
+        existing = WrongWord.query.filter_by(
+            user_id=current_user.id,
+            text=text,
+            type=word_type
+        ).first()
+
+        if existing:
+            return jsonify({'success': False, 'message': '此詞語已在生詞本中'}), 400
+
+        # Create new wrong word
+        wrong_word = WrongWord(
+            user_id=current_user.id,
+            text=text,
+            type=word_type,
+            phonetic=phonetic,
+            meaning=meaning,
+            example=example,
+            audio_id=audio_id,
+            source_session_id=source_session_id,
+            notes=notes
+        )
+
+        db.session.add(wrong_word)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'id': wrong_word.id,
+            'message': '已添加到生詞本'
+        })
+    except Exception as e:
+        print(f"Add wrong word error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '添加失敗'}), 500
+
+
+@app.route('/api/wrong-words/<int:word_id>', methods=['DELETE'])
+def delete_wrong_word(word_id):
+    """Delete a word from wrong words book"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': '請先登錄'}), 401
+
+        wrong_word = WrongWord.query.filter_by(id=word_id, user_id=current_user.id).first()
+        if not wrong_word:
+            return jsonify({'success': False, 'message': '找不到此詞語'}), 404
+
+        db.session.delete(wrong_word)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': '已從生詞本移除'
+        })
+    except Exception as e:
+        print(f"Delete wrong word error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '刪除失敗'}), 500
+
+
+@app.route('/api/wrong-words/<int:word_id>', methods=['PUT'])
+def update_wrong_word(word_id):
+    """Update a word's notes in wrong words book"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': '請先登錄'}), 401
+
+        data = request.json
+        wrong_word = WrongWord.query.filter_by(id=word_id, user_id=current_user.id).first()
+        if not wrong_word:
+            return jsonify({'success': False, 'message': '找不到此詞語'}), 404
+
+        if 'notes' in data:
+            wrong_word.notes = data['notes']
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': '更新成功'
+        })
+    except Exception as e:
+        print(f"Update wrong word error: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': '更新失敗'}), 500
 
 
 # ==================== MAIN ====================

@@ -820,6 +820,64 @@ class DictationApp {
         `;
     }
 
+    async addSessionWrongWordsToBook() {
+        if (!this.currentSessionData || !this.currentSessionData.words_data) {
+            this.showToast('沒有練習數據', 'error');
+            return;
+        }
+
+        const wrongItems = this.currentSessionData.words_data.filter(
+            item => item.isCorrect === false || item.isCorrect === 'false'
+        );
+
+        if (wrongItems.length === 0) {
+            this.showToast('沒有錯題需要加入', 'info');
+            return;
+        }
+
+        let addedCount = 0;
+        for (const item of wrongItems) {
+            const itemData = {
+                text: item.text,
+                type: item.type || 'word',
+                phonetic: item.phonetic || '',
+                meaning: item.meaning || '',
+                example: item.example || '',
+                audio_url: item.audio_url || null
+            };
+
+            try {
+                // Extract audio_id from audio_url if available
+                let audioId = null;
+                if (item.audio_url && item.audio_url.includes('/api/audio/')) {
+                    audioId = parseInt(item.audio_url.split('/api/audio/')[1]) || null;
+                }
+
+                const response = await fetch('/api/wrong-words', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: itemData.text,
+                        type: itemData.type,
+                        phonetic: itemData.phonetic,
+                        meaning: itemData.meaning,
+                        example: itemData.example,
+                        audio_id: audioId
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    addedCount++;
+                }
+            } catch (error) {
+                console.error('Error adding word to book:', error);
+            }
+        }
+
+        this.showToast(`已加入 ${addedCount} 個詞語到生詞本`);
+    }
+
     getRelativeTimeLabel(dateStr) {
         const date = new Date(dateStr);
         const now = new Date();
@@ -831,6 +889,180 @@ class DictationApp {
         if (diffDays < 7) return `${diffDays} 天前`;
         if (diffDays < 30) return `${Math.floor(diffDays / 7)} 週前`;
         return date.toLocaleDateString('zh-HK');
+    }
+
+    // ==================== WRONG WORDS BOOK ====================
+    showWrongWordsBook() {
+        if (!this.isLoggedIn) {
+            this.toggleAuthModal();
+            return;
+        }
+        this.showPage('page-wrong-words-book');
+        this.loadWrongWords();
+    }
+
+    async loadWrongWords(searchQuery = '') {
+        const container = document.getElementById('wrong-words-list');
+        if (!container) return;
+
+        // Show loading skeleton
+        container.innerHTML = this.getHistoryLoadingSkeleton(3);
+
+        try {
+            const response = await fetch(`/api/wrong-words?q=${encodeURIComponent(searchQuery)}`);
+            const data = await response.json();
+
+            if (data.success) {
+                container.innerHTML = this.renderWrongWords(data.wrong_words);
+            } else {
+                container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">error</span><p class="text-gray-500 dark:text-gray-400 text-center">載入失敗</p></div>';
+            }
+        } catch (error) {
+            console.error('Load wrong words error:', error);
+            container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-red-300 dark:text-red-700 mb-4">error</span><p class="text-red-500 dark:text-red-400 text-center">載入失敗</p><button onclick="dictationApp.loadWrongWords()" class="mt-4 px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors">重新載入</button></div>';
+        }
+    }
+
+    renderWrongWords(groupedWords) {
+        if (!groupedWords || Object.keys(groupedWords).length === 0) {
+            return '<div class="flex flex-col items-center justify-center py-16"><span class="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">book_2</span><p class="text-gray-500 dark:text-gray-400 text-center">生詞本是空的</p><p class="text-sm text-gray-400 dark:text-gray-500 mt-2">在練習時點擊按鈕將詞語加入生詞本</p></div>';
+        }
+
+        let html = '';
+        const dateLabels = {
+            '今天': '今天',
+            '昨天': '昨天'
+        };
+
+        for (const [date, words] of Object.entries(groupedWords)) {
+            // Convert date format to display
+            let dateLabel = date;
+            const today = new Date().toLocaleDateString('zh-HK');
+            const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('zh-HK');
+
+            if (date === today) dateLabel = '今天';
+            else if (date === yesterday) dateLabel = '昨天';
+
+            html += `
+                <div class="mb-4">
+                    <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 px-1">${dateLabel}</h3>
+                    <div class="flex flex-col gap-3">
+                        ${words.map(word => this.createWrongWordCard(word)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        return html;
+    }
+
+    createWrongWordCard(word) {
+        const typeIcon = word.type === 'word' ? 'text' : 'format_quote';
+        const typeLabel = word.type === 'word' ? '單詞' : '句子';
+
+        return `
+            <div class="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start gap-3 flex-1">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <span class="material-symbols-outlined">${typeIcon}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-lg font-bold text-text-main dark:text-white">${word.text}</span>
+                                ${word.phonetic ? `<span class="text-xs text-gray-400 font-mono">${word.phonetic}</span>` : ''}
+                            </div>
+                            ${word.meaning ? `<div class="text-sm text-gray-600 dark:text-gray-300 mt-1">${word.meaning}</div>` : ''}
+                            ${word.example ? `<div class="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">例：${word.example}</div>` : ''}
+                            ${word.notes ? `<div class="text-xs text-primary dark:text-primary-light mt-2 p-2 bg-primary/10 rounded-lg">筆記：${word.notes}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 ml-2">
+                        ${word.audio_url ? `
+                            <button onclick="dictationApp.playWrongWordAudio('${word.audio_url}')" class="p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                            </button>
+                        ` : ''}
+                        <button onclick="dictationApp.removeFromWrongWords(${word.id})" class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <span class="material-symbols-outlined text-[20px]">delete</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    playWrongWordAudio(audioUrl) {
+        this.audioPlayer.src = audioUrl;
+        this.audioPlayer.play();
+    }
+
+    searchWrongWords(query) {
+        // Debounce search
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+            this.loadWrongWords(query);
+        }, 300);
+    }
+
+    async addToWrongWords(item) {
+        if (!this.isLoggedIn) {
+            this.showToast('請先登錄以使用生詞本', 'error');
+            this.toggleAuthModal();
+            return;
+        }
+
+        // Extract audio_id from audio_url if available
+        let audioId = null;
+        if (item.audio_url && item.audio_url.includes('/api/audio/')) {
+            audioId = parseInt(item.audio_url.split('/api/audio/')[1]) || null;
+        }
+
+        try {
+            const response = await fetch('/api/wrong-words', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: item.text,
+                    type: item.type || 'word',
+                    phonetic: item.phonetic || '',
+                    meaning: item.meaning || '',
+                    example: item.example || '',
+                    audio_id: audioId
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.showToast('已添加到生詞本');
+            } else {
+                this.showToast(data.message || '添加失敗', 'error');
+            }
+        } catch (error) {
+            console.error('Add to wrong words error:', error);
+            this.showToast('添加失敗', 'error');
+        }
+    }
+
+    async removeFromWrongWords(id) {
+        if (!confirm('確定要從生詞本移除嗎？')) return;
+
+        try {
+            const response = await fetch(`/api/wrong-words/${id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.showToast('已從生詞本移除');
+                this.loadWrongWords(); // Refresh the list
+            } else {
+                this.showToast('移除失敗', 'error');
+            }
+        } catch (error) {
+            console.error('Remove from wrong words error:', error);
+            this.showToast('移除失敗', 'error');
+        }
     }
 
     // ==================== LOADING OVERLAY ====================
@@ -1023,43 +1255,50 @@ class DictationApp {
         if (!container) return;
 
         if (items.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-center py-8">暫無內容，請上傳圖片</p>';
+            container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">暫無內容，請上傳圖片</p>';
             this.hideLoading();
             return;
         }
 
         // Display up to 20 items regardless of login status
         const displayItems = items.slice(0, 20);
-        const playButtonDisabled = !this.isLoggedIn ? 'opacity-50 cursor-not-allowed' : 'hover:text-primary';
-        const playButtonOnClick = !this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${'$&'})"`;
+        const isWords = this.contentType === 'words';
 
         container.innerHTML = displayItems.map((item, index) => {
             const text = item.word || item.sentence;
             const phonetic = item.phonetic || '';
+            const meaning = item.meaning || '';
+            const example = item.example || '';
             const num = index + 1;
 
             // For guest users, disable the play button
             const playBtnClass = !this.isLoggedIn
-                ? 'play-audio-btn p-2 text-gray-300 cursor-not-allowed'
-                : 'play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700';
+                ? 'p-2 text-gray-300 cursor-not-allowed'
+                : 'p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700';
             const playBtnOnClick = !this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, '${this.contentType}', ${index})"`;
 
             return `
-                <div class="group flex items-center gap-3 bg-white dark:bg-surface-dark p-3 pr-2 rounded-xl shadow-soft border border-transparent hover:border-primary/30 transition-all">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-base">
-                        ${num}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <input class="w-full bg-transparent border-none p-0 text-base font-semibold text-text-main dark:text-white placeholder-gray-400 focus:ring-0" type="text" value="${text}" onchange="dictationApp.updateItem('${this.contentType}', ${index}, this.value)">
-                        ${phonetic ? `<div class="text-xs text-gray-400 font-mono">${phonetic}</div>` : ''}
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button class="${playBtnClass}" ${playBtnOnClick}>
-                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
-                        </button>
-                        <button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.deleteItem('${this.contentType}', ${index})">
-                            <span class="material-symbols-outlined text-[20px]">delete</span>
-                        </button>
+                <div class="group bg-white dark:bg-surface-dark p-4 rounded-xl shadow-soft border border-transparent hover:border-primary/30 transition-all">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-base">
+                            ${num}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-lg font-bold text-text-main dark:text-white">${text}</span>
+                                ${phonetic ? `<span class="text-xs text-gray-400 font-mono">${phonetic}</span>` : ''}
+                            </div>
+                            ${meaning ? `<div class="text-sm text-gray-600 dark:text-gray-300 mt-1">${meaning}</div>` : ''}
+                            ${example ? `<div class="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">例：${example}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button class="${playBtnClass}" ${playBtnOnClick}>
+                                <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                            </button>
+                            <button class="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-700" onclick="dictationApp.deleteItem('${this.contentType}', ${index})">
+                                <span class="material-symbols-outlined text-[20px]">delete</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1068,13 +1307,13 @@ class DictationApp {
         // Add info text if there are more than 20 items
         if (items.length > 20) {
             container.innerHTML += `
-                <div class="mt-2 text-xs text-gray-400 text-center">還有 ${items.length - 20} 項未顯示，請選擇最多 20 項</div>
+                <div class="mt-2 text-xs text-gray-400 dark:text-gray-500 text-center">還有 ${items.length - 20} 項未顯示，請選擇最多 20 項</div>
             `;
         }
 
         // Add "Go to Selection" button
         container.innerHTML += `
-            <button onclick="dictationApp.goToSelection()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors font-semibold">
+            <button onclick="dictationApp.goToSelection()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light rounded-xl transition-colors font-semibold">
                 <span class="material-symbols-outlined">checklist</span>
                 選擇聽寫內容
             </button>
@@ -1104,8 +1343,8 @@ class DictationApp {
 
         // Play button disabled for guest users
         const playBtnClass = !this.isLoggedIn
-            ? 'play-audio-btn p-2 text-gray-300 cursor-not-allowed'
-            : 'play-audio-btn p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700';
+            ? 'p-2 text-gray-300 cursor-not-allowed'
+            : 'p-2 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700';
         const playBtnOnClick = !this.isLoggedIn ? '' : 'onclick="dictationApp.handlePlayClick(this, \'%type%\', %index%)"';
 
         // Display up to 20 items regardless of login status
@@ -1123,6 +1362,7 @@ class DictationApp {
                             <div class="flex-1 text-left">
                                 <div class="font-semibold text-text-main dark:text-white">${item.word}</div>
                                 ${item.phonetic ? `<div class="text-xs text-gray-400 font-mono">${item.phonetic}</div>` : ''}
+                                ${item.meaning ? `<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${item.meaning}</div>` : ''}
                             </div>
                         </button>
                         <button class="${playBtnClass}" ${!this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, 'words', ${index})"`}>
@@ -1143,6 +1383,7 @@ class DictationApp {
                             <span class="material-symbols-outlined ${isSelected ? 'text-primary' : 'text-gray-300'}">${isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
                             <div class="flex-1 text-left">
                                 <div class="font-semibold text-text-main dark:text-white">${item.sentence}</div>
+                                ${item.meaning ? `<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${item.meaning}</div>` : ''}
                             </div>
                         </button>
                         <button class="${playBtnClass}" ${!this.isLoggedIn ? '' : `onclick="dictationApp.handlePlayClick(this, 'sentences', ${index})"`}>
@@ -1279,8 +1520,10 @@ class DictationApp {
                 word: word.word,
                 phonetic: word.phonetic || '',
                 meaning: word.meaning || '',
+                example: word.example || '',
                 type: 'word',
                 id: `word_${index}`,
+                text: word.word,
                 audio_url: this.ttsCache.get(word.word) || null
             });
         });
@@ -1293,6 +1536,7 @@ class DictationApp {
                 meaning: sentence.meaning || '',
                 type: 'sentence',
                 id: `sentence_${index}`,
+                text: sentence.sentence,
                 audio_url: this.ttsCache.get(sentence.sentence) || null
             });
         });
@@ -1306,14 +1550,6 @@ class DictationApp {
         this.currentIndex = 0;
         this.dictationMode = selectedItems[0].type;
 
-        // Generate audio only for items not yet cached
-        const itemsNeedingTTS = selectedItems.filter(item => !item.audio_url);
-        if (itemsNeedingTTS.length > 0) {
-            this.showLoading(`正在生成 ${itemsNeedingTTS.length} 個音頻...`);
-            await this.generateMissingAudio();
-            this.hideLoading();
-        }
-
         // Initialize results
         this.results = this.items.map(item => ({
             ...item,
@@ -1321,9 +1557,28 @@ class DictationApp {
             isCorrect: null
         }));
 
+        // Batch size for audio generation
+        const BATCH_SIZE = 5;
+
+        // Generate audio for first batch (up to 5 items)
+        const firstBatch = selectedItems.slice(0, BATCH_SIZE);
+        const firstBatchNeedingTTS = firstBatch.filter(item => !item.audio_url);
+
+        if (firstBatchNeedingTTS.length > 0) {
+            this.showLoading(`正在生成音頻 (1/${Math.ceil(selectedItems.length / BATCH_SIZE)})...`);
+            await this.generateAudioForItems(firstBatchNeedingTTS);
+            this.hideLoading();
+        }
+
         this.updateDictationUI();
         this.updateDictationAutoPlayUI();
         this.showPage('page-dictation');
+
+        // Start background generation for remaining items
+        const remainingItems = selectedItems.slice(BATCH_SIZE);
+        if (remainingItems.length > 0) {
+            this.generateAudioInBackground(remainingItems);
+        }
 
         // Auto-play first audio if enabled
         if (this.autoPlay) {
@@ -1331,17 +1586,46 @@ class DictationApp {
         }
     }
 
-    async generateMissingAudio() {
-        const itemsNeedingTTS = this.items.filter(item => !item.audio_url);
-        if (itemsNeedingTTS.length === 0) return;
+    async generateAudioInBackground(items) {
+        const BATCH_SIZE = 5;
+        let currentBatch = 0;
+        const totalBatches = Math.ceil(items.length / BATCH_SIZE);
+
+        // Process in batches
+        const processNextBatch = async () => {
+            const startIndex = currentBatch * BATCH_SIZE;
+            const endIndex = Math.min(startIndex + BATCH_SIZE, items.length);
+            const batch = items.slice(startIndex, endIndex);
+
+            if (batch.length === 0) return;
+
+            // Show loading overlay
+            this.showLoading(`正在生成更多音頻 (${currentBatch + 1}/${totalBatches})...`);
+
+            await this.generateAudioForItems(batch);
+
+            this.hideLoading();
+
+            currentBatch++;
+            if (currentBatch < totalBatches) {
+                // Continue with next batch
+                setTimeout(processNextBatch, 100);
+            }
+        };
+
+        processNextBatch();
+    }
+
+    async generateAudioForItems(items) {
+        if (items.length === 0) return;
 
         try {
             const response = await fetch('/api/tts/batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    items: itemsNeedingTTS.map(item => ({
-                        text: item.word || item.sentence,
+                    items: items.map(item => ({
+                        text: item.text,
                         type: item.type,
                         id: item.id
                     })),
@@ -1359,8 +1643,7 @@ class DictationApp {
                     if (item && result.success) {
                         item.audio_url = result.audio_url;
                         // Cache the TTS result
-                        const text = item.word || item.sentence;
-                        this.ttsCache.set(text, result.audio_url);
+                        this.ttsCache.set(item.text, result.audio_url);
                     }
                 });
             }
@@ -1557,7 +1840,14 @@ class DictationApp {
 
         const text = item.word || item.sentence || '---';
         document.getElementById('reveal-answer').textContent = text;
-        document.getElementById('reveal-pinyin').textContent = item.phonetic || item.meaning || '';
+
+        // Show meaning, phonetic and example
+        let subText = '';
+        if (item.meaning) subText += item.meaning;
+        if (item.phonetic && subText) subText += ' | ';
+        if (item.phonetic) subText += item.phonetic;
+        if (item.example && subText) subText += '\n例：' + item.example;
+        document.getElementById('reveal-pinyin').textContent = subText || (item.meaning || '');
 
         // Reset answer visibility
         this.toggleAnswerVisibility(false);
@@ -1695,6 +1985,22 @@ class DictationApp {
                 this.finishDictation();
             }
         }, 800);
+    }
+
+    addCurrentItemToWrongWords() {
+        const item = this.items[this.currentIndex];
+        if (!item) return;
+
+        const itemData = {
+            text: item.text || item.word || item.sentence,
+            type: item.type || 'word',
+            phonetic: item.phonetic || '',
+            meaning: item.meaning || '',
+            example: item.example || '',
+            audio_url: item.audio_url || null
+        };
+
+        this.addToWrongWords(itemData);
     }
 
     // ==================== RESULTS ====================
