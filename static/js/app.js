@@ -196,10 +196,20 @@ class DictationApp {
                     const streak = data.stats.streak || 0;
                     streakCountEl.textContent = `${streak} 天`;
                 }
+                // Also update recent activity from same response
+                this.updateRecentActivityFromStats(data.stats);
             }
         } catch (error) {
             console.error('Error loading streak:', error);
         }
+    }
+
+    updateRecentActivityFromStats(stats) {
+        const container = document.getElementById('recent-activity-list');
+        if (!container || !stats.history || stats.history.length === 0) return;
+
+        const recentSessions = stats.history.slice(0, 3);
+        container.innerHTML = recentSessions.map(session => this.createRecentActivityCard(session)).join('');
     }
 
     // ==================== SETTINGS ====================

@@ -327,6 +327,8 @@ def fallback_extraction(text, mode):
         r'^[\d\.\-\/]+$',  # just numbers/dates
         r'^https?://',  # URLs
         r'^[a-zA-Z]+:\/\/',  # URLs
+        r'^[0-9]+[a-zA-Z]+',  # starts with number like "2history"
+        r'^[a-zA-Z]+[0-9]+$',  # ends with number
     ]
 
     def is_valid_word(w):
@@ -347,11 +349,11 @@ def fallback_extraction(text, mode):
     words = [w for w in words if is_valid_word(w)]
     unique_words = list(dict.fromkeys(words))[:20]
 
-    # Extract sentences (at least 5 words, 10+ chars)
-    sentences = re.split(r'[.!?]+', text)
-    sentences = [s.strip() for s in sentences if len(s.strip().split()) >= 5 and len(s.strip()) >= 10][:20]
-    # Filter out code-like sentences
-    sentences = [s for s in sentences if not re.match(r'^[\w\.\[\]]+$', s)]
+    # Extract sentences - be more lenient for technical content
+    sentences = re.split(r'[.!?\n]+', text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) >= 10][:20]
+    # Filter out lines that are just codes/numbers
+    sentences = [s for s in sentences if not re.match(r'^[\d\.\[\]\/\-\s]+$', s)]
 
     if mode == 'words':
         return [{"word": w, "phonetic": "", "meaning": ""} for w in unique_words]
@@ -470,6 +472,12 @@ def ocr_api():
 
         # Extract content using DeepSeek
         extracted = extract_content_with_deepseek(text, mode='both')
+
+        # Fallback if DeepSeek returned empty results
+        if (not extracted.get('words') and not extracted.get('sentences')) or \
+           (len(extracted.get('words', [])) == 0 and len(extracted.get('sentences', [])) == 0):
+            print("DeepSeek returned empty, using fallback extraction")
+            extracted = fallback_extraction(text, 'both')
 
         return jsonify({
             'success': True,
