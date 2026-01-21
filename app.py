@@ -857,6 +857,7 @@ def get_practice_history():
             .limit(50)\
             .all()
 
+        # Don't load words_data here - only load when needed for session detail
         return jsonify({
             'success': True,
             'sessions': [{
@@ -866,7 +867,6 @@ def get_practice_history():
                 'correct_count': s.correct_count,
                 'wrong_count': s.wrong_count,
                 'accuracy': s.accuracy,
-                'words_data': json.loads(s.words_data) if s.words_data else [],
                 'created_at': s.created_at.isoformat()
             } for s in sessions]
         })
@@ -940,7 +940,7 @@ def get_practice_stats():
             .order_by(PracticeSession.created_at.desc())\
             .all()
 
-        # Build history for last 30 days
+        # Build history for last 30 days (without words_data to improve performance)
         history = []
         for s in recent_sessions[:10]:
             history.append({
@@ -950,7 +950,6 @@ def get_practice_stats():
                 'correct_count': s.correct_count,
                 'wrong_count': s.wrong_count,
                 'accuracy': s.accuracy,
-                'words_data': json.loads(s.words_data) if s.words_data else [],
                 'created_at': s.created_at.isoformat()
             })
 

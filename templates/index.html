@@ -650,11 +650,11 @@
 
             <!-- Action Buttons -->
             <div class="flex gap-3 mb-6">
-                <button onclick="dictationApp.retrySessionAll()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary-dark transition-colors">
+                <button id="retry-all-btn" onclick="dictationApp.retrySessionAll()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary-dark transition-colors">
                     <span class="material-symbols-outlined">replay</span>
                     重新練習全部
                 </button>
-                <button onclick="dictationApp.retrySessionWrong()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 rounded-xl font-semibold hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors">
+                <button id="retry-wrong-btn" onclick="dictationApp.retrySessionWrong()" class="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 rounded-xl font-semibold hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors">
                     <span class="material-symbols-outlined">error</span>
                     只練錯題
                 </button>
