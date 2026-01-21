@@ -171,8 +171,6 @@ def get_google_user_info(access_token):
 
 def perform_ocr(image_data):
     """Perform OCR on the uploaded image using OCR.space"""
-    import uuid
-
     try:
         # If image_data is a base64 string, decode it
         if image_data.startswith('data:image'):
@@ -198,7 +196,10 @@ def perform_ocr(image_data):
 
         filename = f"image.{ext}"
         files = {'file': (filename, image_bytes, f'image/{ext}')}
+
+        # Include apikey in the data
         data = {
+            'apikey': OCR_SPACE_API_KEY,
             'language': 'eng',
             'detectOrientation': 'true',
             'scale': 'true',
@@ -206,10 +207,11 @@ def perform_ocr(image_data):
         }
 
         response = requests.post(url, files=files, data=data, timeout=30)
+        print(f"OCR API response status: {response.status_code}")
 
         # Check for HTTP errors
         if response.status_code != 200:
-            raise Exception(f"OCR API returned status {response.status_code}")
+            raise Exception(f"OCR API returned status {response.status_code}: {response.text[:200]}")
 
         try:
             result = response.json()
