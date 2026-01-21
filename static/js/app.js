@@ -2343,7 +2343,7 @@ class DictationApp {
                     correct_count: correct,
                     wrong_count: wrong,
                     accuracy: accuracy,
-                    words_data: JSON.stringify(wordsData)
+                    words_data: wordsData  // Send as array, not stringified
                 })
             });
 
