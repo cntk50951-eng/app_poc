@@ -255,9 +255,9 @@ class DictationApp {
             this.updateWrongWordsDisplay();
         } else if (pageId === 'page-history') {
             this.loadHistory();
-        } else if (pageId === 'page-session-detail' && this.currentSessionId) {
-            this.showSessionDetail(this.currentSessionId);
         }
+        // Note: page-session-detail is handled by showSessionDetail() directly
+        // Don't call showSessionDetail here to avoid infinite loops
     }
 
     goBack() {
@@ -426,7 +426,7 @@ class DictationApp {
             return;
         }
         this.showPage('page-history');
-        this.loadHistory();
+        // loadHistory() is called by showPageWithoutHistory
     }
 
     async loadHistory() {
@@ -1858,9 +1858,11 @@ class DictationApp {
     playCurrentAudio() {
         const item = this.items[this.currentIndex];
         if (!item || !item.audio_url) {
-            console.log('No audio URL for current item');
+            console.log('No audio URL for current item:', item);
             return;
         }
+
+        console.log('Playing audio:', item.audio_url);
 
         if (this.isPlaying) {
             this.audioPlayer.pause();
@@ -1869,9 +1871,23 @@ class DictationApp {
         } else {
             this.audioPlayer.src = item.audio_url;
             this.audioPlayer.playbackRate = this.slowMode ? this.slowModeSpeed : 1.0;
-            this.audioPlayer.play();
-            this.isPlaying = true;
-            this.updatePlayButton(true);
+
+            this.audioPlayer.onloadeddata = () => {
+                console.log('Audio data loaded successfully');
+                this.audioPlayer.play().catch(e => console.error('Play error:', e));
+            };
+
+            this.audioPlayer.onerror = (e) => {
+                console.error('Audio error:', this.audioPlayer.error);
+            };
+
+            this.audioPlayer.play().then(() => {
+                console.log('Audio playing successfully');
+                this.isPlaying = true;
+                this.updatePlayButton(true);
+            }).catch(e => {
+                console.error('Play failed:', e);
+            });
 
             this.audioPlayer.onended = () => {
                 this.isPlaying = false;
