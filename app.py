@@ -267,243 +267,80 @@ def extract_content_with_deepseek(text, mode='both'):
 
     except Exception as e:
         print(f"DeepSeek API Error: {e}")
-        # For exceptions, extract candidates first then use enhanced extraction
-        import re
-        words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
-        words = list(dict.fromkeys(words))[:20]
-        sentences = re.split(r'[.!?\n]+', text)
-        sentences = [s.strip() for s in sentences if len(s.strip()) >= 10][:20]
-        return enhanced_extraction_for_technical(text, mode)
+        # Return empty result if DeepSeek fails
+        if mode == 'words':
+            return []
+        elif mode == 'sentences':
+            return []
+        else:
+            return {'words': [], 'sentences': []}
 
 
 def create_extraction_prompt(text, mode):
     """Create the extraction prompt based on mode"""
     if mode == 'words':
         return f"""
-從以下英文文字中提取最重要的20個有意義的單詞（按重要性排序），返回 JSON 格式：
+分析以下英文文字，提取最有學習價值的單詞（最多20個），返回 JSON：
 
 要求：
-- 只提取真正的英文單詞（2-15個字母），排除數字、符號、代碼片段等
-- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
-- 排除單獨的數字、日期、網址
-- 只返回常見的英文詞彙
+- 只提取真正的英文詞彙（常見單詞）
+- 排除：數字、代碼片段、數據庫字段名、變量名、網址
+- 為每個單詞提供：word, phonetic (/IPA/), meaning（中文）, example（例句）
 
 [
-    {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}},
-    {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}}
-    ... 最多20個
+    {{"word": "example", "phonetic": "/ɪɡˈzæmpl/", "meaning": "例子，示例", "example": "This is an example."}},
+    ...
 ]
-
-只返回 JSON，不要其他文字。
 
 文字內容：
 {text}
         """.strip()
     elif mode == 'sentences':
         return f"""
-從以下英文文字中提取最重要的20個完整句子（按重要性排序），返回 JSON 格式：
+分析以下英文文字，提取最有學習價值的完整句子（最多20個），返回 JSON：
 
 要求：
-- 只提取有意義的完整句子（至少5個單詞）
-- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
-- 排除片段、不完整的句子、標題、標籤等
-- 只返回可獨立成句的完整句子
+- 只提取有意義的完整句子
+- 排除：片段、標題、代碼、數據結構
+- 為每個句子提供：sentence, meaning（中文翻譯）
 
 [
-    {{"sentence": "完整句子1", "meaning": "中文翻譯"}},
-    {{"sentence": "完整句子2", "meaning": "中文翻譯"}}
-    ... 最多20個
+    {{"sentence": "This is a complete sentence.", "meaning": "這是一個完整的句子。"}},
+    ...
 ]
-
-只返回 JSON，不要其他文字。
 
 文字內容：
 {text}
         """.strip()
     else:
         return f"""
-從以下英文文字中提取最重要的20個有意義的單詞和20個完整句子，返回 JSON 格式：
+分析以下英文文字，提取最有學習價值的單詞和句子，返回 JSON：
 
-要求：
-- 單詞：只提取真正的英文單詞（2-15個字母），排除數字、符號、代碼片段等
-- 句子：只提取有意義的完整句子（至少5個單詞），排除片段和不完整內容
-- 排除 like "history[1].action", "data[0].name" 等程式碼或數據結構
-- 排除標題、標籤、數據結構等非自然語言內容
+單詞要求：
+- 只提取真正的英文詞彙（常見單詞）
+- 排除：數字、代碼片段、數據庫字段名、變量名、網址
+- 為每個單詞提供：word, phonetic, meaning, example
 
+句子要求：
+- 只提取有意義的完整句子
+- 排除：片段、標題、代碼、數據結構
+- 為每個句子提供：sentence, meaning
+
+返回格式：
 {{
     "words": [
-        {{"word": "單詞1", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}},
-        {{"word": "單詞2", "phonetic": "/IPA音標/", "meaning": "中文翻譯", "example": "例句"}}
-        ... 最多20個
+        {{"word": "example", "phonetic": "/ɪɡˈzæmpl/", "meaning": "例子", "example": "This is an example."}},
+        ...
     ],
     "sentences": [
-        {{"sentence": "完整句子1", "meaning": "中文翻譯"}},
-        {{"sentence": "完整句子2", "meaning": "中文翻譯"}}
-        ... 最多20個
+        {{"sentence": "This is a sentence.", "meaning": "這是一個句子。"}},
+        ...
     ]
 }}
-
-只返回 JSON，不要其他文字。
 
 文字內容：
 {text}
         """.strip()
-
-
-def enhanced_extraction_for_technical(text, mode):
-    """
-    Enhanced extraction for technical content:
-    1. Use regex to extract candidate words/sentences
-    2. Call DeepSeek to filter and add meanings/phonetics
-    """
-    import re
-
-    # Common English words to filter in (these are likely meaningful)
-    common_words = {
-        'login', 'logout', 'save', 'open', 'mobile', 'book', 'reading', 'education',
-        'food', 'action', 'device', 'details', 'path', 'results', 'execution',
-        'visualization', 'value', 'graph', 'history', 'orders', 'items', 'price',
-        'tags', 'name', 'timestamp', 'page', 'json', 'rows', 'information',
-        'query', 'job', 'results', 'display', 'click', 'select', 'button',
-        'menu', 'list', 'item', 'edit', 'delete', 'add', 'search', 'filter',
-        'user', 'account', 'password', 'email', 'profile', 'settings', 'logout'
-    }
-
-    # Filter patterns to exclude code-like content
-    exclude_patterns = [
-        r'^[a-zA-Z]+\[\d+\]',  # like "history[1]"
-        r'^[a-zA-Z]+\.[a-zA-Z]+',  # like "data.action"
-        r'^[a-zA-Z]+\.\w+\(\)',  # like "console.log()"
-        r'^[\d\.\-\/]+$',  # just numbers/dates
-        r'^https?://',  # URLs
-        r'^[a-zA-Z]+:\/\/',  # URLs
-        r'^[0-9]+[a-zA-Z]+',  # starts with number like "2history"
-        r'^[a-zA-Z]+[0-9]+$',  # ends with number
-    ]
-
-    def is_valid_word(w):
-        # Must contain at least one vowel
-        if not re.search(r'[aeiouAEIOU]', w):
-            return False
-        # Skip if matches exclusion patterns
-        for pattern in exclude_patterns:
-            if re.match(pattern, w):
-                return False
-        return True
-
-    # Step 1: Extract candidate words - be more lenient
-    all_words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
-    # Filter and keep common words + valid words
-    words = []
-    for w in all_words:
-        w_lower = w.lower()
-        if w_lower in common_words or (is_valid_word(w) and len(w) >= 3):
-            if w not in words:
-                words.append(w)
-
-    unique_words = words[:30]  # More words for better context
-
-    # Step 2: Extract candidate sentences - look for patterns in technical content
-    # Split by various delimiters
-    sentences = re.split(r'[.!?\n]+', text)
-    # Filter for sentences with meaningful content
-    meaningful_sentences = []
-    for s in sentences:
-        s = s.strip()
-        # Check if it has at least 2 words or is a known pattern
-        if len(s) >= 5:
-            # Exclude pure technical patterns
-            if not re.match(r'^[\d\.\[\]\/\-\s]+$', s) and not re.match(r'^[\w]+\[\d+\]', s):
-                meaningful_sentences.append(s)
-
-    sentences = meaningful_sentences[:15]
-
-    # Step 3: Call DeepSeek to filter and add meanings
-    try:
-        client = requests.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{
-                    "role": "user",
-                    "content": create_enhanced_prompt(unique_words, sentences, mode)
-                }],
-                "temperature": 0.3,
-                "max_tokens": 2000
-            }
-        )
-
-        result = client.json()
-        content = result['choices'][0]['message']['content']
-        content = content.replace('```json', '').replace('```', '').strip()
-
-        # Parse JSON
-        extracted = json.loads(content)
-
-        # Validate result
-        if not is_valid_extraction_result(extracted):
-            print("DeepSeek returned invalid results, using basic extraction")
-            return basic_extraction(unique_words, sentences, mode)
-
-        return extracted
-
-    except Exception as e:
-        print(f"Enhanced extraction DeepSeek error: {e}")
-        # Fallback to basic extraction if API fails
-        return basic_extraction(unique_words, sentences, mode)
-
-
-def create_enhanced_prompt(words, sentences, mode):
-    """Create prompt for enhanced extraction with DeepSeek"""
-    words_str = ', '.join(words) if words else ""
-    sentences_str = '\n'.join([f"- {s}" for s in sentences[:10]]) if sentences else ""
-
-    return f"""
-從以下候選單詞和句子中，為每個單詞添加音標和中文翻譯，為每個句子添加中文翻譯。
-
-候選單詞：
-{words_str}
-
-候選句子：
-{sentences_str}
-
-要求：
-- 單詞：為每個單詞提供音標和中文翻譯。技術詞彙（如login, logout, device, action等）也應保留並翻譯。
-- 句子：為每個句子提供中文翻譯。
-- 如果句子太短或不完整，仍可保留並翻譯。
-
-返回 JSON 格式：
-{{
-    "words": [
-        {{"word": "login", "phonetic": "/ˈlɒɡɪn/", "meaning": "登入，登錄", "example": "User login successful."}},
-        {{"word": "mobile", "phonetic": "/ˈməʊbaɪl/", "meaning": "移動設備，手機", "example": "Mobile phone usage."}}
-        ...
-    ],
-    "sentences": [
-        {{"sentence": "User login successful.", "meaning": "用戶登入成功。"}},
-        {{"sentence": "User logout completed.", "meaning": "用戶登出完成。"}}
-        ...
-    ]
-}}
-
-只返回 JSON，不要其他文字。"""
-
-
-def basic_extraction(words, sentences, mode):
-    """Basic extraction without DeepSeek (last resort fallback)"""
-    if mode == 'words':
-        return [{"word": w, "phonetic": "", "meaning": "[待翻譯]"} for w in words[:20]]
-    elif mode == 'sentences':
-        return [{"sentence": s, "meaning": "[待翻譯]"} for s in sentences[:20]]
-    else:
-        return {
-            "words": [{"word": w, "phonetic": "", "meaning": "[待翻譯]"} for w in words[:20]],
-            "sentences": [{"sentence": s, "meaning": "[待翻譯]"} for s in sentences[:20]]
-        }
 
 
 def generate_speech_with_murf(text, voice_id="en-US-natalie", rate=-15, pitch=-5):
@@ -598,42 +435,9 @@ def index():
     return render_template('index.html')
 
 
-def is_valid_extraction_result(extracted):
-    """Check if the extraction result is valid (has proper structure and content)"""
-    if not extracted:
-        return False
-
-    # Must be a dict with words/sentences
-    if not isinstance(extracted, dict):
-        return False
-
-    words = extracted.get('words', [])
-    sentences = extracted.get('sentences', [])
-
-    # If both are empty, consider it invalid
-    if len(words) == 0 and len(sentences) == 0:
-        return False
-
-    # Check if words have proper structure
-    for word in words:
-        if not isinstance(word, dict):
-            return False
-        if not word.get('word'):
-            return False
-
-    # Check if sentences have proper structure
-    for sent in sentences:
-        if not isinstance(sent, dict):
-            return False
-        if not sent.get('sentence'):
-            return False
-
-    return True
-
-
 @app.route('/api/ocr', methods=['POST'])
 def ocr_api():
-    """OCR endpoint - handles both OCR and content extraction"""
+    """OCR endpoint - extract text from image and analyze with DeepSeek"""
     try:
         data = request.json
         image_data = data.get('image', '')
@@ -641,37 +445,11 @@ def ocr_api():
         if not image_data:
             return jsonify({'error': 'No image provided'}), 400
 
+        # Step 1: OCR extract text
         text = perform_ocr(image_data)
 
-        # Check if text looks like database query or technical content
-        technical_patterns = [
-            r'SELECT.*FROM',      # SQL queries
-            r'INSERT.*INTO',
-            r'UPDATE.*SET',
-            r'DELETE.*FROM',
-            r'history\[\d+\]',     # database/JSON array access
-            r'data\[\d+\]',
-            r'\[\d+\]\.',         # array access pattern
-            r'\]\.[a-zA-Z]+',     # object property access
-            r'Query results',     # query result headers
-            r'Execution details', # technical UI text
-            r'Results per page',  # pagination UI
-        ]
-
-        is_technical = any(re.search(p, text, re.IGNORECASE) for p in technical_patterns)
-
-        if is_technical:
-            print("Detected technical content, using enhanced extraction")
-            # Use enhanced extraction for technical content
-            extracted = enhanced_extraction_for_technical(text, 'both')
-        else:
-            # Extract content using DeepSeek for normal content
-            extracted = extract_content_with_deepseek(text, mode='both')
-
-            # Fallback if DeepSeek returned empty or invalid results
-            if not is_valid_extraction_result(extracted):
-                print("DeepSeek returned invalid results, using enhanced extraction")
-                extracted = enhanced_extraction_for_technical(text, 'both')
+        # Step 2: Call DeepSeek to analyze and extract meaningful content
+        extracted = extract_content_with_deepseek(text, mode='both')
 
         return jsonify({
             'success': True,
