@@ -539,6 +539,7 @@ def tts_batch_api():
                     'success': True
                 })
             except Exception as e:
+                print(f"TTS Error for item {item_id}: {e}")
                 results.append({
                     'id': item_id,
                     'type': item_type,
@@ -553,6 +554,7 @@ def tts_batch_api():
         })
 
     except Exception as e:
+        print(f"TTS Batch Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
