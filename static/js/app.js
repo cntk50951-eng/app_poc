@@ -1585,7 +1585,12 @@ class DictationApp {
         // Show loading for initial batch
         if (firstBatchNeedingTTS.length > 0) {
             this.showLoading('準備中...');
-            await this.generateAudioForItems(firstBatchNeedingTTS);
+            try {
+                await this.generateAudioForItems(firstBatchNeedingTTS);
+            } catch (error) {
+                console.error('Audio generation error:', error);
+                this.showToast('音頻生成失敗，繼續進入聽寫頁面', 'error');
+            }
         }
 
         // Update UI and enter dictation page immediately
@@ -1649,6 +1654,7 @@ class DictationApp {
         if (items.length === 0) return;
 
         try {
+            console.log('Generating audio for items:', items.length);
             const response = await fetch('/api/tts/batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1664,15 +1670,22 @@ class DictationApp {
                 })
             });
 
+            console.log('TTS response status:', response.status);
             const data = await response.json();
+            console.log('TTS response:', data);
 
             if (data.success) {
                 data.results.forEach(result => {
                     const item = this.items.find(i => i.id === result.id);
                     if (item && result.success) {
-                        item.audio_url = result.audio_url;
+                        // Ensure audio_url has proper format
+                        let audioUrl = result.audio_url;
+                        if (audioUrl && !audioUrl.startsWith('/api/audio/') && !audioUrl.startsWith('http')) {
+                            audioUrl = `/api/audio/${audioUrl}`;
+                        }
+                        item.audio_url = audioUrl;
                         // Cache the TTS result
-                        this.ttsCache.set(item.text, result.audio_url);
+                        this.ttsCache.set(item.text, audioUrl);
                     }
                 });
             }
