@@ -1577,26 +1577,27 @@ class DictationApp {
             isCorrect: null
         }));
 
-        // Batch size for audio generation
-        const BATCH_SIZE = 5;
-
-        // Generate audio for first batch (up to 5 items)
-        const firstBatch = selectedItems.slice(0, BATCH_SIZE);
+        // Progressive loading: Generate first 3 items quickly
+        const FIRST_BATCH_SIZE = 3;
+        const firstBatch = selectedItems.slice(0, FIRST_BATCH_SIZE);
         const firstBatchNeedingTTS = firstBatch.filter(item => !item.audio_url);
 
+        // Show loading for initial batch
         if (firstBatchNeedingTTS.length > 0) {
-            this.showLoading(`正在生成音頻 (1/${Math.ceil(selectedItems.length / BATCH_SIZE)})...`);
+            this.showLoading('準備中...');
             await this.generateAudioForItems(firstBatchNeedingTTS);
-            this.hideLoading();
         }
 
+        // Update UI and enter dictation page immediately
         this.updateDictationUI();
         this.updateDictationAutoPlayUI();
         this.showPage('page-dictation');
+        this.hideLoading();
 
-        // Start background generation for remaining items
-        const remainingItems = selectedItems.slice(BATCH_SIZE);
+        // Background generation for remaining items
+        const remainingItems = selectedItems.slice(FIRST_BATCH_SIZE);
         if (remainingItems.length > 0) {
+            // Process remaining items in batches
             this.generateAudioInBackground(remainingItems);
         }
 
@@ -1611,25 +1612,33 @@ class DictationApp {
         let currentBatch = 0;
         const totalBatches = Math.ceil(items.length / BATCH_SIZE);
 
+        // Show toast notification for background progress
+        if (items.length > 0) {
+            this.showToast(`正在背景生成音頻...`, 'info', 2000);
+        }
+
         // Process in batches
         const processNextBatch = async () => {
             const startIndex = currentBatch * BATCH_SIZE;
             const endIndex = Math.min(startIndex + BATCH_SIZE, items.length);
             const batch = items.slice(startIndex, endIndex);
 
-            if (batch.length === 0) return;
-
-            // Show loading overlay
-            this.showLoading(`正在生成更多音頻 (${currentBatch + 1}/${totalBatches})...`);
+            if (batch.length === 0) {
+                if (currentBatch > 0) {
+                    this.showToast('音頻生成完成！', 'success', 2000);
+                }
+                return;
+            }
 
             await this.generateAudioForItems(batch);
-
-            this.hideLoading();
 
             currentBatch++;
             if (currentBatch < totalBatches) {
                 // Continue with next batch
                 setTimeout(processNextBatch, 100);
+            } else {
+                // All done
+                this.showToast('音頻生成完成！', 'success', 2000);
             }
         };
 
