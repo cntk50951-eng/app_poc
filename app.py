@@ -358,6 +358,17 @@ def enhanced_extraction_for_technical(text, mode):
     """
     import re
 
+    # Common English words to filter in (these are likely meaningful)
+    common_words = {
+        'login', 'logout', 'save', 'open', 'mobile', 'book', 'reading', 'education',
+        'food', 'action', 'device', 'details', 'path', 'results', 'execution',
+        'visualization', 'value', 'graph', 'history', 'orders', 'items', 'price',
+        'tags', 'name', 'timestamp', 'page', 'json', 'rows', 'information',
+        'query', 'job', 'results', 'display', 'click', 'select', 'button',
+        'menu', 'list', 'item', 'edit', 'delete', 'add', 'search', 'filter',
+        'user', 'account', 'password', 'email', 'profile', 'settings', 'logout'
+    }
+
     # Filter patterns to exclude code-like content
     exclude_patterns = [
         r'^[a-zA-Z]+\[\d+\]',  # like "history[1]"
@@ -371,24 +382,41 @@ def enhanced_extraction_for_technical(text, mode):
     ]
 
     def is_valid_word(w):
-        if len(w) < 2 or len(w) > 15:
-            return False
+        # Must contain at least one vowel
         if not re.search(r'[aeiouAEIOU]', w):
             return False
+        # Skip if matches exclusion patterns
         for pattern in exclude_patterns:
             if re.match(pattern, w):
                 return False
         return True
 
-    # Step 1: Extract candidate words
-    words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
-    words = [w for w in words if is_valid_word(w)]
-    unique_words = list(dict.fromkeys(words))[:20]
+    # Step 1: Extract candidate words - be more lenient
+    all_words = re.findall(r'\b([A-Za-z]{2,15})\b', text)
+    # Filter and keep common words + valid words
+    words = []
+    for w in all_words:
+        w_lower = w.lower()
+        if w_lower in common_words or (is_valid_word(w) and len(w) >= 3):
+            if w not in words:
+                words.append(w)
 
-    # Step 2: Extract candidate sentences
+    unique_words = words[:30]  # More words for better context
+
+    # Step 2: Extract candidate sentences - look for patterns in technical content
+    # Split by various delimiters
     sentences = re.split(r'[.!?\n]+', text)
-    sentences = [s.strip() for s in sentences if len(s.strip()) >= 10][:20]
-    sentences = [s for s in sentences if not re.match(r'^[\d\.\[\]\/\-\s]+$', s)]
+    # Filter for sentences with meaningful content
+    meaningful_sentences = []
+    for s in sentences:
+        s = s.strip()
+        # Check if it has at least 2 words or is a known pattern
+        if len(s) >= 5:
+            # Exclude pure technical patterns
+            if not re.match(r'^[\d\.\[\]\/\-\s]+$', s) and not re.match(r'^[\w]+\[\d+\]', s):
+                meaningful_sentences.append(s)
+
+    sentences = meaningful_sentences[:15]
 
     # Step 3: Call DeepSeek to filter and add meanings
     try:
@@ -412,7 +440,16 @@ def enhanced_extraction_for_technical(text, mode):
         result = client.json()
         content = result['choices'][0]['message']['content']
         content = content.replace('```json', '').replace('```', '').strip()
-        return json.loads(content)
+
+        # Parse JSON
+        extracted = json.loads(content)
+
+        # Validate result
+        if not is_valid_extraction_result(extracted):
+            print("DeepSeek returned invalid results, using basic extraction")
+            return basic_extraction(unique_words, sentences, mode)
+
+        return extracted
 
     except Exception as e:
         print(f"Enhanced extraction DeepSeek error: {e}")
@@ -426,28 +463,29 @@ def create_enhanced_prompt(words, sentences, mode):
     sentences_str = '\n'.join([f"- {s}" for s in sentences[:10]]) if sentences else ""
 
     return f"""
-從以下候選單詞和句子中，過濾出有意義的內容，並為每個單詞添加音標和中文翻譯，為每個句子添加中文翻譯。
+從以下候選單詞和句子中，為每個單詞添加音標和中文翻譯，為每個句子添加中文翻譯。
 
-候選單詞（去除數字、代碼、數據結構等）：
+候選單詞：
 {words_str}
 
-候選句子（去除不完整、片段化的內容）：
+候選句子：
 {sentences_str}
 
 要求：
-- 單詞：只保留真正的英文詞彙（常見單詞），排除技術術語、變量名、數據庫字段名等
-- 句子：只保留完整、有意義的自然語言句子
-- 為每個單詞提供：word, phonetic (/IPA/), meaning（中文翻譯）, example（例句）
-- 為每個句子提供：sentence, meaning（中文翻譯）
+- 單詞：為每個單詞提供音標和中文翻譯。技術詞彙（如login, logout, device, action等）也應保留並翻譯。
+- 句子：為每個句子提供中文翻譯。
+- 如果句子太短或不完整，仍可保留並翻譯。
 
 返回 JSON 格式：
 {{
     "words": [
-        {{"word": "example", "phonetic": "/ɪɡˈzæmpl/", "meaning": "例子，示例", "example": "This is an example sentence."}},
+        {{"word": "login", "phonetic": "/ˈlɒɡɪn/", "meaning": "登入，登錄", "example": "User login successful."}},
+        {{"word": "mobile", "phonetic": "/ˈməʊbaɪl/", "meaning": "移動設備，手機", "example": "Mobile phone usage."}}
         ...
     ],
     "sentences": [
-        {{"sentence": "This is a complete sentence.", "meaning": "這是一個完整的句子。"}},
+        {{"sentence": "User login successful.", "meaning": "用戶登入成功。"}},
+        {{"sentence": "User logout completed.", "meaning": "用戶登出完成。"}}
         ...
     ]
 }}
@@ -561,30 +599,34 @@ def index():
 
 
 def is_valid_extraction_result(extracted):
-    """Check if the extraction result is valid (not database queries or technical content)"""
+    """Check if the extraction result is valid (has proper structure and content)"""
     if not extracted:
         return False
 
-    # Check if it's a list of dicts with expected keys
-    if isinstance(extracted, list):
-        for item in extracted:
-            if not isinstance(item, dict):
-                return False
-            if 'word' in item and not item.get('meaning'):
-                return False  # Missing meaning for word
-            if 'sentence' in item and not item.get('meaning'):
-                return False  # Missing translation for sentence
+    # Must be a dict with words/sentences
+    if not isinstance(extracted, dict):
+        return False
 
-    # Check if it's a dict with words/sentences
-    if isinstance(extracted, dict):
-        if 'words' in extracted:
-            for word in extracted['words']:
-                if not word.get('meaning'):
-                    return False
-        if 'sentences' in extracted:
-            for sent in extracted['sentences']:
-                if not sent.get('meaning'):
-                    return False
+    words = extracted.get('words', [])
+    sentences = extracted.get('sentences', [])
+
+    # If both are empty, consider it invalid
+    if len(words) == 0 and len(sentences) == 0:
+        return False
+
+    # Check if words have proper structure
+    for word in words:
+        if not isinstance(word, dict):
+            return False
+        if not word.get('word'):
+            return False
+
+    # Check if sentences have proper structure
+    for sent in sentences:
+        if not isinstance(sent, dict):
+            return False
+        if not sent.get('sentence'):
+            return False
 
     return True
 
@@ -603,16 +645,20 @@ def ocr_api():
 
         # Check if text looks like database query or technical content
         technical_patterns = [
-            r'^[\w\s]*SELECT.*FROM',
-            r'^[\w\s]*INSERT.*INTO',
-            r'^[\w\s]*UPDATE.*SET',
-            r'^[\w\s]*DELETE.*FROM',
-            r'^[\w\s]*history\[\d+\]',
-            r'^[\w\s]*data\[\d+\]',
-            r'^[\w\s]*[\w]+\.[\w]+\([\w\s,]*\)',  # function calls
+            r'SELECT.*FROM',      # SQL queries
+            r'INSERT.*INTO',
+            r'UPDATE.*SET',
+            r'DELETE.*FROM',
+            r'history\[\d+\]',     # database/JSON array access
+            r'data\[\d+\]',
+            r'\[\d+\]\.',         # array access pattern
+            r'\]\.[a-zA-Z]+',     # object property access
+            r'Query results',     # query result headers
+            r'Execution details', # technical UI text
+            r'Results per page',  # pagination UI
         ]
 
-        is_technical = any(re.search(p, text, re.IGNORECASE | re.DOTALL) for p in technical_patterns)
+        is_technical = any(re.search(p, text, re.IGNORECASE) for p in technical_patterns)
 
         if is_technical:
             print("Detected technical content, using enhanced extraction")
